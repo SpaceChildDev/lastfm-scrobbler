@@ -1,0 +1,45 @@
+# Build outputs
+bin/
+obj/
+publish/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# SQLite database (contains personal data, session keys, API credentials)
+*.db
+*.db-shm
+*.db-wal
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Installer output
+installer-output/
+
+# Secrets / local config
+appsettings.local.*
+secrets.*
+
+# Local / third-party folders
+.claude/
+AMWin-RichPresence-v1.6.1-x64/
+icons-preview/
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Test results
+TestResults/
+coverage/
