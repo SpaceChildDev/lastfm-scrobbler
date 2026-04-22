@@ -1,5 +1,6 @@
 using LastFmScrobbler.Core;
 using LastFmScrobbler.Data;
+using LastFmScrobbler.Localization;
 using LastFmScrobbler.Models;
 
 namespace LastFmScrobbler.UI;
@@ -45,6 +46,10 @@ public class MainForm : Form
     private PictureBox  _albumArt  = null!;
     private Button      _loveBtn   = null!;
     private bool        _trackLoved;
+    private CancellationTokenSource? _artCts;
+
+    // Scrobbling page
+    private ComboBox _langCombo = null!;
 
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 500 };
     private Track?   _currentTrack;
@@ -79,6 +84,19 @@ public class MainForm : Form
     private Label        _statPending  = null!;
     private DataGridView _historyGrid  = null!;
 
+    // Stats page
+    private NavButton _btnStats    = null!;
+    private Panel     _pageStats   = null!;
+    private Panel     _chartPanel  = null!;
+    private Panel     _artistsPanel = null!;
+    private Panel     _tracksPanel  = null!;
+    private Label     _bigTotal    = null!;
+    private Label     _bigWeek     = null!;
+    private Label     _bigToday    = null!;
+    private (string day, int count)[]                  _dailyData      = [];
+    private (string artist, int count)[]               _topArtistsData = [];
+    private (string artist, string title, int count)[] _topTracksData  = [];
+
     // Accent tracking
     private Panel         _accentBar   = null!;
     private NavButton?    _activeNavBtn;
@@ -98,6 +116,7 @@ public class MainForm : Form
         BuildAccountPage();
         BuildScrobblePage();
         BuildNormPage();
+        BuildStatsPage();
         LoadSettings();
         LoadRules();
 
@@ -129,21 +148,23 @@ public class MainForm : Form
 
         var sidebar = new Panel { Dock = DockStyle.Left, Width = 150, BackColor = CSidebar };
 
-        _btnMonitor  = NavBtn("Monitor",       "▶");
-        _btnHistory  = NavBtn("Geçmiş",        "◎");
-        _btnAccount  = NavBtn("Hesap",          "◉");
-        _btnScrobble = NavBtn("Scrobbling",    "⚙");
-        _btnNorm     = NavBtn("Normalizasyon", "≡");
+        _btnMonitor  = NavBtn(Loc.T("NavMonitor"),       "▶");
+        _btnHistory  = NavBtn(Loc.T("NavHistory"),       "◎");
+        _btnStats    = NavBtn(Loc.T("NavStats"),          "∑");
+        _btnAccount  = NavBtn(Loc.T("NavAccount"),       "◉");
+        _btnScrobble = NavBtn(Loc.T("NavScrobbling"),    "⚙");
+        _btnNorm     = NavBtn(Loc.T("NavNormalization"), "≡");
 
         _btnMonitor.Click  += (_, _) => Navigate(_pageMonitor,  _btnMonitor);
         _btnHistory.Click  += (_, _) => { Navigate(_pageHistory, _btnHistory); LoadHistory(); RefreshStats(); };
+        _btnStats.Click    += (_, _) => { Navigate(_pageStats,   _btnStats);   LoadStatsPage(); };
         _btnAccount.Click  += (_, _) => Navigate(_pageAccount,  _btnAccount);
         _btnScrobble.Click += (_, _) => Navigate(_pageScrobble, _btnScrobble);
         _btnNorm.Click     += (_, _) => Navigate(_pageNorm,     _btnNorm);
 
         var bugBtn = new Button
         {
-            Text      = "Hata Bildir",
+            Text      = Loc.T("ReportBug"),
             Dock      = DockStyle.Bottom,
             Height    = 34,
             FlatStyle = FlatStyle.Flat,
@@ -163,6 +184,7 @@ public class MainForm : Form
         sidebar.Controls.Add(_btnNorm);
         sidebar.Controls.Add(_btnScrobble);
         sidebar.Controls.Add(_btnAccount);
+        sidebar.Controls.Add(_btnStats);
         sidebar.Controls.Add(_btnHistory);
         sidebar.Controls.Add(_btnMonitor);
 
@@ -173,8 +195,9 @@ public class MainForm : Form
         _pageAccount  = new Panel { BackColor = CMain, Visible = false };
         _pageScrobble = new Panel { BackColor = CMain, Visible = false };
         _pageNorm     = new Panel { BackColor = CMain, Visible = false };
+        _pageStats    = new Panel { BackColor = CMain, Visible = false };
 
-        _content.Controls.AddRange([_pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm]);
+        _content.Controls.AddRange([_pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats]);
         _content.Resize += (_, _) => SizePages();
 
         var titleBar = BuildTitleBar();
@@ -187,15 +210,15 @@ public class MainForm : Form
     private void SizePages()
     {
         var r = _content.ClientRectangle;
-        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm })
+        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats })
             p.Bounds = r;
     }
 
     private void Navigate(Panel page, NavButton btn)
     {
-        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm })
+        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats })
             p.Visible = false;
-        foreach (var b in new[] { _btnMonitor, _btnHistory, _btnAccount, _btnScrobble, _btnNorm })
+        foreach (var b in new[] { _btnMonitor, _btnHistory, _btnStats, _btnAccount, _btnScrobble, _btnNorm })
         {
             b.BackColor = Color.Transparent;
             b.ForeColor = CDim;
@@ -235,15 +258,21 @@ public class MainForm : Form
 
         _accentBar = new Panel { Dock = DockStyle.Left, Width = 3, BackColor = _cAccent };
 
-        // Album art on the right side of the card
+        // Album art on the right — wrapped in a panel to add 5px padding on all sides
         _albumArt = new PictureBox
         {
-            Dock        = DockStyle.Right,
-            Width       = 90,
-            SizeMode    = PictureBoxSizeMode.Zoom,
-            BackColor   = Color.FromArgb(20, 20, 20),
-            Visible     = true,
+            Dock     = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.StretchImage,
+            BackColor = Color.Transparent,
         };
+        var artWrap = new Panel
+        {
+            Dock      = DockStyle.Right,
+            Width     = 120,
+            BackColor = Color.FromArgb(20, 20, 20),
+            Padding   = new Padding(5),
+        };
+        artWrap.Controls.Add(_albumArt);
 
         var cardInner = new Panel
         {
@@ -256,7 +285,7 @@ public class MainForm : Form
         {
             Dock      = DockStyle.Top,
             Height    = 16,
-            Text      = "ŞU AN ÇALINIYOR",
+            Text      = Loc.T("NowPlaying"),
             Font      = new Font("Segoe UI", 7f, FontStyle.Bold),
             ForeColor = Color.FromArgb(100, 100, 100),
             TextAlign = ContentAlignment.MiddleLeft,
@@ -272,7 +301,7 @@ public class MainForm : Form
         cardInner.Controls.Add(nowLbl);
 
         card.Controls.Add(cardInner);
-        card.Controls.Add(_albumArt);
+        card.Controls.Add(artWrap);
         card.Controls.Add(_accentBar);
 
         var sp1 = Gap(10);
@@ -298,12 +327,12 @@ public class MainForm : Form
         _loveBtn.FlatAppearance.MouseDownBackColor      = Color.Transparent;
         _loveBtn.Click += LoveBtnClicked;
 
-        _monStatus = new Label { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 8.5f), ForeColor = CDim, Text = "Not playing", TextAlign = ContentAlignment.MiddleLeft };
+        _monStatus = new Label { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 8.5f), ForeColor = CDim, Text = Loc.T("NotPlaying"), TextAlign = ContentAlignment.MiddleLeft };
         _monEta    = new Label { Dock = DockStyle.Right, Width = 52, TextAlign = ContentAlignment.MiddleRight, Font = new Font("Segoe UI", 8f), ForeColor = CDim };
 
         statusRow.Controls.Add(_monStatus);
-        statusRow.Controls.Add(_loveBtn);
         statusRow.Controls.Add(_monEta);
+        statusRow.Controls.Add(_loveBtn);
 
         var barRow = new Panel { Dock = DockStyle.Top, Height = 6 };
         _monBar = new ProgressBar { Dock = DockStyle.Fill, Minimum = 0, Maximum = 100, ForeColor = _cAccent };
@@ -337,16 +366,16 @@ public class MainForm : Form
 
     private void BuildHistoryPage()
     {
-        var heading = PageHeading("Geçmiş");
+        var heading = PageHeading(Loc.T("NavHistory"));
         heading.Dock = DockStyle.Top;
 
         // Stats row
         var statsRow = new Panel { Dock = DockStyle.Top, Height = 38, BackColor = Color.FromArgb(20, 20, 20) };
 
-        _statTotal   = StatLabel("Toplam: —");
-        _statToday   = StatLabel("Bugün: —");
-        _statWeek    = StatLabel("Bu hafta: —");
-        _statPending = StatLabel("Kuyruk: —");
+        _statTotal   = StatLabel(string.Format(Loc.T("StatTotal"),   "—"));
+        _statToday   = StatLabel(string.Format(Loc.T("StatToday"),   "—"));
+        _statWeek    = StatLabel(string.Format(Loc.T("StatWeek"),    "—"));
+        _statPending = StatLabel(Loc.T("StatQueueEmpty"));
 
         _statTotal.Location   = new Point(24, 10);
         _statToday.Location   = new Point(150, 10);
@@ -383,20 +412,20 @@ public class MainForm : Form
         _historyGrid.ColumnHeadersHeightSizeMode                      = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _historyGrid.ColumnHeadersHeight                              = 28;
 
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time",   HeaderText = "Zaman",    FillWeight = 15 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Artist", HeaderText = "Sanatçı",  FillWeight = 25 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Title",  HeaderText = "Parça",    FillWeight = 30 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Album",  HeaderText = "Albüm",    FillWeight = 25 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Durum",    FillWeight = 5  });
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time",   HeaderText = Loc.T("ColTime"),   FillWeight = 15 });
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Artist", HeaderText = Loc.T("ColArtist"), FillWeight = 25 });
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Title",  HeaderText = Loc.T("ColTrack"),  FillWeight = 30 });
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Album",  HeaderText = Loc.T("ColAlbum"),  FillWeight = 25 });
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = Loc.T("ColStatus"), FillWeight = 5  });
 
         // Button row
         var btnRow = new Panel { Dock = DockStyle.Bottom, Height = 42, BackColor = CMain };
 
-        var refreshBtn = MakeBtn("↻  Yenile", 100, 28);
+        var refreshBtn = MakeBtn(Loc.T("BtnRefresh"), 100, 28);
         refreshBtn.Location = new Point(24, 7);
         refreshBtn.Click   += (_, _) => { LoadHistory(); RefreshStats(); };
 
-        var manualBtn = MakeBtn("+ Manuel Scrobble", 150, 28);
+        var manualBtn = MakeBtn(Loc.T("BtnManualScrobble"), 150, 28);
         manualBtn.Location  = new Point(134, 7);
         manualBtn.Click    += ManualScrobbleClicked;
 
@@ -432,10 +461,10 @@ public class MainForm : Form
         var (total, today, week) = _db.GetStats();
         var pending              = _db.PendingCount();
 
-        _statTotal.Text   = $"Toplam: {total:N0}";
-        _statToday.Text   = $"Bugün: {today:N0}";
-        _statWeek.Text    = $"Bu hafta: {week:N0}";
-        _statPending.Text = pending > 0 ? $"Kuyruk: {pending}" : "Kuyruk: —";
+        _statTotal.Text   = string.Format(Loc.T("StatTotal"), total.ToString("N0"));
+        _statToday.Text   = string.Format(Loc.T("StatToday"), today.ToString("N0"));
+        _statWeek.Text    = string.Format(Loc.T("StatWeek"),  week.ToString("N0"));
+        _statPending.Text = pending > 0 ? string.Format(Loc.T("StatQueue"), pending) : Loc.T("StatQueueEmpty");
     }
 
     // ── Account Page ──────────────────────────────────────────────────────────
@@ -451,7 +480,7 @@ public class MainForm : Form
 
         var hint = new LinkLabel
         {
-            Text      = "API anahtarını last.fm/api adresinden al →",
+            Text      = Loc.T("GetApiKeyHint"),
             Size      = new Size(rw, 18),
             Font      = new Font("Segoe UI", 8.5f),
             LinkColor = _cAccent,
@@ -476,15 +505,15 @@ public class MainForm : Form
                 OpenUrl($"https://www.last.fm/user/{_settings.Username}");
         };
 
-        _authBtn = MakeBtn("Last.fm ile Giriş", 160, 30);
+        _authBtn = MakeBtn(Loc.T("LoginWithLastFm"), 160, 30);
         _authBtn.Click += AuthClicked;
 
-        var saveBtn = MakeBtn("Kaydet", 80, 30);
+        var saveBtn = MakeBtn(Loc.T("Save"), 80, 30);
         saveBtn.BackColor = _cAccent;
         _accentBtns.Add(saveBtn);
         saveBtn.Click += (_, _) => SaveAccountSettings();
 
-        var heading = PageHeading("Hesap");
+        var heading = PageHeading(Loc.T("NavAccount"));
         heading.Dock = DockStyle.Top;
 
         var inner = new Panel { Dock = DockStyle.Fill, BackColor = CMain };
@@ -521,20 +550,23 @@ public class MainForm : Form
         _threshMax = new NumericUpDown { Size = new Size(65, 24), Minimum = 30, Maximum = 600, Value = 240, Increment = 30, BackColor = CInput, ForeColor = CFg };
         _dupWindow = new NumericUpDown { Size = new Size(65, 24), Minimum = 0,  Maximum = 60,  Value = 5,   Increment = 1,  BackColor = CInput, ForeColor = CFg };
 
-        _filterAppleChk = MakeChk("Sadece Apple Music'ten scrobble yap");
-        _editBeforeChk  = MakeChk("Scrobble öncesi düzenleme ekranı göster");
-        _showNotifChk   = MakeChk("Scrobble edilince bildirim göster");
-        _startWinChk    = MakeChk("Windows ile birlikte başlat");
+        _filterAppleChk = MakeChk(Loc.T("FilterAppleOnly"));
+        _editBeforeChk  = MakeChk(Loc.T("EditBeforeScrobble"));
+        _showNotifChk   = MakeChk(Loc.T("ShowNotification"));
+        _startWinChk    = MakeChk(Loc.T("StartWithWindows"));
 
-        var saveBtn = MakeBtn("Kaydet", 80, 30);
+        _langCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, BackColor = CInput, ForeColor = CFg, FlatStyle = FlatStyle.Flat, Size = new Size(140, 24) };
+        foreach (var l in Loc.Available) _langCombo.Items.Add(l.NativeName);
+
+        var saveBtn = MakeBtn(Loc.T("Save"), 80, 30);
         saveBtn.BackColor = _cAccent;
         _accentBtns.Add(saveBtn);
         saveBtn.Click += (_, _) => SaveScrobbleSettings();
 
-        var accentBtn = MakeBtn("Renk Seç", 90, 30);
+        var accentBtn = MakeBtn(Loc.T("PickColor"), 90, 30);
         accentBtn.Click += PickAccentColorClicked;
 
-        var heading = PageHeading("Scrobbling");
+        var heading = PageHeading(Loc.T("NavScrobbling"));
         heading.Dock = DockStyle.Top;
 
         var inner = new Panel { Dock = DockStyle.Fill, BackColor = CMain };
@@ -548,13 +580,13 @@ public class MainForm : Form
             y += 34;
         }
 
-        NumRow("Scrobble eşiği:", _threshPct, "% çalındıktan sonra");
-        NumRow("Maksimum:",       _threshMax, "saniye (hangisi önce gelirse)");
+        NumRow(Loc.T("LblThreshold"), _threshPct, Loc.T("UnitAfterPercent"));
+        NumRow(Loc.T("LblMaximum"),   _threshMax, Loc.T("UnitSecondsFirst"));
 
-        inner.Controls.Add(new Label { Text = "Last.fm en az 30 saniye gerektirir.", Location = new Point(lx, y), Size = new Size(500, 18), ForeColor = Color.FromArgb(65, 65, 65), Font = new Font("Segoe UI", 8.5f) });
+        inner.Controls.Add(new Label { Text = Loc.T("NoteMin30"), Location = new Point(lx, y), Size = new Size(500, 18), ForeColor = Color.FromArgb(65, 65, 65), Font = new Font("Segoe UI", 8.5f) });
         y += 28;
 
-        NumRow("Tekrar koruması:", _dupWindow, "dk — aynı parçayı atla (0 = kapalı)");
+        NumRow(Loc.T("LblDuplicateProtection"), _dupWindow, Loc.T("UnitMinSkipDup"));
 
         foreach (var chk in new CheckBox[] { _filterAppleChk, _editBeforeChk, _showNotifChk, _startWinChk })
         {
@@ -563,11 +595,16 @@ public class MainForm : Form
             y += 28;
         }
 
-        saveBtn.Location  = new Point(lx, y + 8);
+        saveBtn.Location   = new Point(lx, y + 8);
         accentBtn.Location = new Point(lx + saveBtn.Width + 10, y + 8);
         inner.Controls.Add(saveBtn);
         inner.Controls.Add(accentBtn);
-        inner.Controls.Add(new Label { Text = "Vurgu rengi:", Location = new Point(lx + saveBtn.Width + accentBtn.Width + 20, y + 14), Size = new Size(80, 18), ForeColor = CDim });
+        inner.Controls.Add(new Label { Text = Loc.T("LblAccentColor"), Location = new Point(lx + saveBtn.Width + accentBtn.Width + 20, y + 14), Size = new Size(80, 18), ForeColor = CDim });
+
+        y += 46;
+        inner.Controls.Add(new Label { Text = Loc.T("LblLanguage"), Location = new Point(lx, y + 4), Size = new Size(180, 20), ForeColor = CDim, Font = new Font("Segoe UI", 9f) });
+        _langCombo.Location = new Point(210, y);
+        inner.Controls.Add(_langCombo);
 
         _pageScrobble.Controls.Add(inner);
         _pageScrobble.Controls.Add(heading);
@@ -577,12 +614,12 @@ public class MainForm : Form
 
     private void BuildNormPage()
     {
-        var heading = PageHeading("Normalizasyon");
+        var heading = PageHeading(Loc.T("NavNormalization"));
         heading.Dock = DockStyle.Top;
 
         _autoNormChk = new CheckBox
         {
-            Text      = "Scrobble öncesi track bilgisini otomatik normalize et",
+            Text      = Loc.T("AutoNormalize"),
             Dock      = DockStyle.Top,
             Height    = 30,
             AutoSize  = false,
@@ -615,15 +652,15 @@ public class MainForm : Form
         _rulesGrid.ColumnHeadersDefaultCellStyle.ForeColor          = CDim;
         _rulesGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(18, 18, 18);
 
-        _rulesGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Enabled", HeaderText = "Açık",     FillWeight = 5,  Width = 40 });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Field",   HeaderText = "Alan",     FillWeight = 12, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Desc",    HeaderText = "Açıklama", FillWeight = 28, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Pattern", HeaderText = "Pattern",  FillWeight = 38 });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Replace", HeaderText = "Değiştir", FillWeight = 17 });
+        _rulesGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Enabled", HeaderText = Loc.T("ColEnabled"),     FillWeight = 5,  Width = 40 });
+        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Field",   HeaderText = Loc.T("ColField"),       FillWeight = 12, ReadOnly = true });
+        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Desc",    HeaderText = Loc.T("ColDescription"), FillWeight = 28, ReadOnly = true });
+        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Pattern", HeaderText = "Pattern",               FillWeight = 38 });
+        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn  { Name = "Replace", HeaderText = Loc.T("ColReplace"),     FillWeight = 17 });
 
-        var addBtn  = MakeBtn("+ Kural Ekle", 108, 28); addBtn.Click  += AddRuleClicked;
-        var delBtn  = MakeBtn("Seçileni Sil", 108, 28); delBtn.Click  += DeleteRuleClicked;
-        var saveBtn = MakeBtn("Kaydet",        80, 28);
+        var addBtn  = MakeBtn(Loc.T("BtnAddRule"),       108, 28); addBtn.Click  += AddRuleClicked;
+        var delBtn  = MakeBtn(Loc.T("BtnDeleteSelected"), 108, 28); delBtn.Click += DeleteRuleClicked;
+        var saveBtn = MakeBtn(Loc.T("Save"),               80, 28);
         saveBtn.BackColor = _cAccent;
         _accentBtns.Add(saveBtn);
         saveBtn.Click += (_, _) => SaveNormSettings();
@@ -641,6 +678,237 @@ public class MainForm : Form
         _pageNorm.Controls.Add(btnRow);
     }
 
+    // ── Stats Page ────────────────────────────────────────────────────────────
+
+    private void BuildStatsPage()
+    {
+        var heading = PageHeading(Loc.T("NavStats"));
+        heading.Dock   = DockStyle.Top;
+        heading.Height = 44;
+
+        // Summary row: 3 stat cards
+        var summaryRow = new Panel { Dock = DockStyle.Top, Height = 62, BackColor = Color.FromArgb(20, 20, 20) };
+        var cardTotal  = MakeStatCard(out _bigTotal, Loc.T("StatsTotalLabel"));
+        var cardWeek   = MakeStatCard(out _bigWeek,  Loc.T("StatsThisWeek"));
+        var cardToday  = MakeStatCard(out _bigToday, Loc.T("StatsToday"));
+        cardTotal.Location = new Point(24,  5);
+        cardWeek.Location  = new Point(220, 5);
+        cardToday.Location = new Point(416, 5);
+        summaryRow.Controls.AddRange([cardTotal, cardWeek, cardToday]);
+
+        // Chart section
+        var chartLbl = SectionLabel(Loc.T("StatsLast14Days"));
+        chartLbl.Padding   = new Padding(24, 0, 0, 0);
+        chartLbl.TextAlign = ContentAlignment.MiddleLeft;
+
+        _chartPanel = new Panel { Dock = DockStyle.Top, Height = 90, BackColor = Color.FromArgb(20, 20, 20) };
+        _chartPanel.Paint += PaintDailyChart;
+
+        var gap = Gap(6);
+
+        // Bottom: artists (left) + tracks (right)
+        var bottomSection = new Panel { Dock = DockStyle.Fill };
+
+        var leftPanel    = new Panel { Dock = DockStyle.Left, Width = 260, BackColor = Color.FromArgb(22, 22, 22) };
+        var artistsHdr   = SectionLabel(Loc.T("StatsTopArtists"));
+        artistsHdr.Padding   = new Padding(16, 0, 0, 0);
+        artistsHdr.TextAlign = ContentAlignment.MiddleLeft;
+        _artistsPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        _artistsPanel.Paint += PaintTopArtists;
+        leftPanel.Controls.Add(_artistsPanel);
+        leftPanel.Controls.Add(artistsHdr);   // last added = topmost
+
+        var divider = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = Color.FromArgb(38, 38, 38) };
+
+        var rightPanel  = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(22, 22, 22) };
+        var tracksHdr   = SectionLabel(Loc.T("StatsTopTracks"));
+        tracksHdr.Padding   = new Padding(16, 0, 0, 0);
+        tracksHdr.TextAlign = ContentAlignment.MiddleLeft;
+        _tracksPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        _tracksPanel.Paint += PaintTopTracks;
+        rightPanel.Controls.Add(_tracksPanel);
+        rightPanel.Controls.Add(tracksHdr);   // last added = topmost
+
+        bottomSection.Controls.Add(rightPanel);
+        bottomSection.Controls.Add(divider);
+        bottomSection.Controls.Add(leftPanel);  // last added = leftmost
+
+        _pageStats.Controls.Add(bottomSection);
+        _pageStats.Controls.Add(gap);
+        _pageStats.Controls.Add(_chartPanel);
+        _pageStats.Controls.Add(chartLbl);
+        _pageStats.Controls.Add(summaryRow);
+        _pageStats.Controls.Add(heading);       // last added = topmost
+    }
+
+    private void LoadStatsPage()
+    {
+        var (total, today, week) = _db.GetStats();
+        _bigTotal.Text = total.ToString("N0");
+        _bigWeek.Text  = week.ToString("N0");
+        _bigToday.Text = today.ToString("N0");
+
+        _dailyData      = _db.GetDailyScrobbles(14);
+        _topArtistsData = _db.GetTopArtists(8);
+        _topTracksData  = _db.GetTopTracks(8);
+
+        _chartPanel.Invalidate();
+        _artistsPanel.Invalidate();
+        _tracksPanel.Invalidate();
+    }
+
+    private void PaintDailyChart(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        var r = _chartPanel.ClientRectangle;
+        const int pl = 24, pr = 24, pt = 8, pb = 18;
+        int left = pl, top = pt, right = r.Width - pr, bottom = r.Height - pb;
+        int chartW = right - left, chartH = bottom - top;
+
+        // Fill 14-day array, missing days = 0
+        var today = DateTime.Today;
+        var days  = new int[14];
+        foreach (var (day, count) in _dailyData)
+        {
+            if (DateTime.TryParse(day, out var d))
+            {
+                int idx = (int)(today - d).TotalDays;
+                if (idx >= 0 && idx < 14) days[13 - idx] = count;
+            }
+        }
+
+        int maxCount = days.Max();
+        if (maxCount == 0)
+        {
+            using var noDataFont = new Font("Segoe UI", 9f);
+            TextRenderer.DrawText(g, Loc.T("StatsNoData"), noDataFont, r, CDim,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            return;
+        }
+
+        int slot = chartW / 14;
+        int barW = Math.Max(4, slot - 4);
+
+        using var barBrush  = new SolidBrush(_cAccent);
+        using var emptyBrush = new SolidBrush(Color.FromArgb(42, 42, 42));
+        using var lblFont   = new Font("Segoe UI", 7f);
+
+        for (int i = 0; i < 14; i++)
+        {
+            int x    = left + i * slot + (slot - barW) / 2;
+            int barH = (int)((double)days[i] / maxCount * (chartH - 18));
+            int y    = bottom - 18 - barH;
+
+            if (days[i] > 0)
+                g.FillRectangle(barBrush, x, y, barW, barH);
+            else
+                g.FillRectangle(emptyBrush, x, bottom - 19, barW, 1);
+
+            // Label for first, middle, last bar
+            if (i == 0 || i == 7 || i == 13)
+            {
+                var date  = today.AddDays(i - 13);
+                var label = date.ToString("M/d");
+                TextRenderer.DrawText(g, label, lblFont,
+                    new Rectangle(x - 8, bottom - 17, barW + 16, 16), CDim,
+                    TextFormatFlags.HorizontalCenter);
+            }
+        }
+    }
+
+    private void PaintTopArtists(object? sender, PaintEventArgs e)
+    {
+        if (_topArtistsData.Length == 0) return;
+        var g   = e.Graphics;
+        var r   = _artistsPanel.ClientRectangle;
+        int max = _topArtistsData.Max(a => a.count);
+        if (max == 0) max = 1;
+        const int rowH = 25, px = 16;
+        int maxBarW = r.Width - px * 2 - 36;
+
+        using var barBg       = new SolidBrush(Color.FromArgb(38, 38, 38));
+        using var accentBrush = new SolidBrush(_cAccent);
+        using var nameFont    = new Font("Segoe UI", 8.5f);
+        using var numFont     = new Font("Segoe UI", 8f);
+
+        for (int i = 0; i < Math.Min(8, _topArtistsData.Length); i++)
+        {
+            var (artist, count) = _topArtistsData[i];
+            int y    = i * rowH + 4;
+            int barW = (int)((double)count / max * maxBarW);
+
+            g.FillRectangle(barBg,      px, y + 18, maxBarW, 5);
+            g.FillRectangle(accentBrush, px, y + 18, barW,   5);
+
+            TextRenderer.DrawText(g, artist, nameFont,
+                new Rectangle(px, y, maxBarW, 16), CFg,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, count.ToString("N0"), numFont,
+                new Rectangle(r.Width - px - 32, y, 32, 16), CDim,
+                TextFormatFlags.Right);
+        }
+    }
+
+    private void PaintTopTracks(object? sender, PaintEventArgs e)
+    {
+        if (_topTracksData.Length == 0) return;
+        var g = e.Graphics;
+        var r = _tracksPanel.ClientRectangle;
+        const int rowH = 27, px = 16;
+
+        using var mainFont = new Font("Segoe UI", 8.5f);
+        using var subFont  = new Font("Segoe UI", 7.5f);
+        using var numFont  = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+        using var sepBrush = new SolidBrush(Color.FromArgb(35, 35, 35));
+
+        for (int i = 0; i < Math.Min(8, _topTracksData.Length); i++)
+        {
+            var (artist, title, count) = _topTracksData[i];
+            int y = i * rowH;
+
+            if (i > 0) g.FillRectangle(sepBrush, px, y, r.Width - px * 2, 1);
+
+            TextRenderer.DrawText(g, $"{i + 1}", numFont,
+                new Rectangle(px, y + 6, 22, 16), Color.FromArgb(70, 70, 70),
+                TextFormatFlags.Right);
+
+            int textX = px + 28;
+            int textW = r.Width - textX - px - 42;
+            TextRenderer.DrawText(g, title, mainFont,
+                new Rectangle(textX, y + 4, textW, 14), CFg,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, artist, subFont,
+                new Rectangle(textX, y + 15, textW, 13), CDim,
+                TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, count.ToString("N0"), subFont,
+                new Rectangle(r.Width - px - 38, y + 9, 38, 14), CDim,
+                TextFormatFlags.Right);
+        }
+    }
+
+    private static Panel MakeStatCard(out Label bigNum, string label)
+    {
+        var card = new Panel { Size = new Size(182, 52), BackColor = Color.FromArgb(28, 28, 28) };
+        bigNum = new Label
+        {
+            Location  = new Point(14, 3),
+            Size      = new Size(154, 28),
+            Text      = "—",
+            Font      = new Font("Segoe UI", 18f, FontStyle.Bold),
+            ForeColor = CFg,
+        };
+        var lbl = new Label
+        {
+            Location  = new Point(14, 34),
+            Size      = new Size(154, 14),
+            Text      = label,
+            Font      = new Font("Segoe UI", 7f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(75, 75, 75),
+        };
+        card.Controls.AddRange([bigNum, lbl]);
+        return card;
+    }
+
     // ── Monitor Events ────────────────────────────────────────────────────────
 
     private void OnNowPlaying(object? sender, Track? track)
@@ -656,7 +924,7 @@ public class MainForm : Form
             _monTitle.Text  = "—";
             _monArtist.Text = "";
             _monAlbum.Text  = "";
-            SetStatus("Not playing", CDim);
+            SetStatus(Loc.T("NotPlaying"), CDim);
             _monBar.Value   = 0;
             _monEta.Text    = "";
             SetLoveBtn(enabled: false, loved: false);
@@ -664,7 +932,7 @@ public class MainForm : Form
             return;
         }
 
-        _monAlbum.Text = string.IsNullOrEmpty(track.Album) ? "(albüm çözülüyor…)" : track.Album;
+        _monAlbum.Text = string.IsNullOrEmpty(track.Album) ? Loc.T("ResolvingAlbum") : track.Album;
 
         if (!isNewTrack) return;
 
@@ -673,24 +941,32 @@ public class MainForm : Form
         _threshMs       = _engine.GetScrobbleThresholdMs(track);
         _monTitle.Text  = track.Title;
         _monArtist.Text = track.Artist;
-        SetStatus("Scrobble bekleniyor…", Color.FromArgb(200, 160, 0));
+        SetStatus(Loc.T("WaitingToScrobble"), Color.FromArgb(200, 160, 0));
         AppendLog($"▶  {track.Artist} — {track.Title}");
         SetLoveBtn(enabled: _engine.IsAuthenticated, loved: false);
         _trackLoved = false;
 
-        // Fetch album art asynchronously
+        // Fetch album art asynchronously — delay to let SMTC update the thumbnail
         _albumArt.Image = null;
-        _ = LoadAlbumArtAsync();
+        _artCts?.Cancel();
+        _artCts = new CancellationTokenSource();
+        _ = LoadAlbumArtAsync(_artCts.Token);
     }
 
-    private async Task LoadAlbumArtAsync()
+    private async Task LoadAlbumArtAsync(CancellationToken ct)
     {
-        var img = await _engine.GetCurrentThumbnailAsync();
-        if (img is null) return;
-        if (InvokeRequired)
-            Invoke(() => { _albumArt.Image?.Dispose(); _albumArt.Image = img; });
-        else
-        { _albumArt.Image?.Dispose(); _albumArt.Image = img; }
+        try
+        {
+            // SMTC caches the previous track's thumbnail; wait for Apple Music to push the new one
+            await Task.Delay(1200, ct);
+            var img = await _engine.GetCurrentThumbnailAsync();
+            if (img is null || ct.IsCancellationRequested) return;
+            if (InvokeRequired)
+                Invoke(() => { _albumArt.Image?.Dispose(); _albumArt.Image = img; });
+            else
+                { _albumArt.Image?.Dispose(); _albumArt.Image = img; }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private void OnScrobbled(object? sender, (Track track, bool success) e)
@@ -699,13 +975,13 @@ public class MainForm : Form
         _scrobbled = true;
         if (e.success)
         {
-            SetStatus("Scrobble edildi ✓", Color.FromArgb(80, 200, 80));
+            SetStatus(Loc.T("ScrobbledOk"), Color.FromArgb(80, 200, 80));
             _monBar.Value = 100;
             AppendLog($"✓  {e.track.Artist} — {e.track.Title}  [{e.track.Album}]");
         }
         else
         {
-            SetStatus("Scrobble başarısız ✗", Color.FromArgb(220, 60, 60));
+            SetStatus(Loc.T("ScrobbleFailed"), Color.FromArgb(220, 60, 60));
             AppendLog($"✗  {e.track.Artist} — {e.track.Title}");
         }
     }
@@ -713,7 +989,7 @@ public class MainForm : Form
     private void OnQueueFlushed(object? sender, int count)
     {
         if (InvokeRequired) { Invoke(() => OnQueueFlushed(sender, count)); return; }
-        AppendLog($"⬆  {count} kuyrukta bekleyen scrobble gönderildi");
+        AppendLog($"⬆  {string.Format(Loc.T("QueueFlushed"), count)}");
     }
 
     private void OnTick(object? sender, EventArgs e)
@@ -723,7 +999,7 @@ public class MainForm : Form
         var elapsed   = (DateTime.UtcNow - _startedAt).TotalMilliseconds;
         _monBar.Value = (int)Math.Min(100, elapsed / _threshMs * 100);
         var rem       = TimeSpan.FromMilliseconds(Math.Max(0, _threshMs - elapsed));
-        _monEta.Text  = rem.TotalSeconds < 1 ? "şimdi…" : $"–{(int)rem.TotalSeconds}s";
+        _monEta.Text  = rem.TotalSeconds < 1 ? Loc.T("Now") : $"–{(int)rem.TotalSeconds}s";
     }
 
     private void SetStatus(string t, Color c) { _monStatus.Text = t; _monStatus.ForeColor = c; }
@@ -786,6 +1062,8 @@ public class MainForm : Form
         _showNotifChk.Checked   = _settings.ShowNowPlayingNotification;
         _startWinChk.Checked    = _settings.StartWithWindows;
         _autoNormChk.Checked    = _settings.AutoNormalize;
+        var langIdx = Loc.Available.ToList().FindIndex(l => l.Code == _settings.Language);
+        _langCombo.SelectedIndex = langIdx >= 0 ? langIdx : 0;
         UpdateAuthStatus();
     }
 
@@ -793,9 +1071,9 @@ public class MainForm : Form
     {
         if (!string.IsNullOrEmpty(_settings.SessionKey))
         {
-            _authStatusLabel.Text      = $"Giriş yapıldı: {_settings.Username ?? "(bilinmiyor)"}";
+            _authStatusLabel.Text      = string.Format(Loc.T("LoggedInAs"), _settings.Username ?? "?");
             _authStatusLabel.ForeColor = Color.FromArgb(80, 200, 80);
-            _authBtn.Text              = "Tekrar Giriş Yap";
+            _authBtn.Text              = Loc.T("LogInAgain");
             _profileLink.Text          = $"last.fm/user/{_settings.Username} →";
             _profileLink.Visible       = true;
             _profileLink.Links.Clear();
@@ -803,9 +1081,9 @@ public class MainForm : Form
         }
         else
         {
-            _authStatusLabel.Text      = "Giriş yapılmadı.";
+            _authStatusLabel.Text      = Loc.T("NotLoggedIn");
             _authStatusLabel.ForeColor = Color.FromArgb(220, 80, 80);
-            _authBtn.Text              = "Last.fm ile Giriş";
+            _authBtn.Text              = Loc.T("LoginWithLastFm");
             _profileLink.Visible       = false;
         }
     }
@@ -839,6 +1117,16 @@ public class MainForm : Form
         _settings.EditBeforeScrobble          = _editBeforeChk.Checked;
         _settings.ShowNowPlayingNotification  = _showNotifChk.Checked;
         _settings.StartWithWindows            = _startWinChk.Checked;
+        if (_langCombo.SelectedIndex >= 0)
+        {
+            var newLang = Loc.Available[_langCombo.SelectedIndex].Code;
+            if (newLang != _settings.Language)
+            {
+                _settings.Language = newLang;
+                MessageBox.Show(Loc.T("RestartToApplyLang"), Loc.T("RestartRequired"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
         _db.SaveSettings(_settings);
         _engine.UpdateSettings(_settings);
         ApplyStartWithWindows(_settings.StartWithWindows);
@@ -866,7 +1154,7 @@ public class MainForm : Form
         var sec = _apiSecretBox.Text.Trim();
         if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(sec))
         {
-            MessageBox.Show("Önce API Key ve Secret girin.", "Eksik bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(Loc.T("MsgEnterApiKey"), Loc.T("TitleMissingInfo"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         _engine.LastFmClient.Configure(key, sec, null);
@@ -885,7 +1173,7 @@ public class MainForm : Form
 
     private void AddRuleClicked(object? sender, EventArgs e)
     {
-        _db.SaveRule(new NormalizationRule { Field = RuleField.Title, Pattern = @"\s*\(örnek\)", Replacement = "", Description = "Yeni kural", IsEnabled = true });
+        _db.SaveRule(new NormalizationRule { Field = RuleField.Title, Pattern = @"\s*\(example\)", Replacement = "", Description = Loc.T("NewRule"), IsEnabled = true });
         LoadRules();
     }
 
@@ -1042,10 +1330,10 @@ public class MainForm : Form
         };
         var logoLbl = new Label
         {
-            Text      = "last.fm",
+            Text      = "last.fm Scrobbler",
             Dock      = DockStyle.Fill,
             ForeColor = _cAccent,
-            Font      = new Font("Segoe UI", 14f, FontStyle.Bold),
+            Font      = new Font("Segoe UI", 11f, FontStyle.Bold),
             TextAlign = ContentAlignment.MiddleLeft,
             Padding   = new Padding(16, 0, 0, 0),
             BackColor = Color.Transparent,

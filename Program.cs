@@ -1,6 +1,7 @@
 using LastFmScrobbler.Data;
 using LastFmScrobbler.Core;
 using LastFmScrobbler.UI;
+using LastFmScrobbler.Localization;
 
 Application.EnableVisualStyles();
 Application.SetCompatibleTextRenderingDefault(false);
@@ -21,6 +22,8 @@ var dbPath = Path.Combine(dataDir, "lastfm_scrobbler.db");
 
 using var db = new Database(dbPath);
 var settings = db.LoadSettings();
+
+Loc.SetLanguage(settings.Language);
 
 using var engine = new ScrobbleEngine(db, settings);
 using var trayApp = new TrayApp(db, engine, settings);

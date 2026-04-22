@@ -1,3 +1,5 @@
+using LastFmScrobbler.Localization;
+
 namespace LastFmScrobbler.UI;
 
 public class ManualScrobbleForm : Form
@@ -22,7 +24,7 @@ public class ManualScrobbleForm : Form
 
     private void InitializeComponent()
     {
-        Text            = "Manuel Scrobble";
+        Text            = Loc.T("ManualScrobbleTitle");
         Size            = new Size(430, 256);
         StartPosition   = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -66,10 +68,10 @@ public class ManualScrobbleForm : Form
         _artistBox.Location = new Point(rx, y + 1 * 36);
         _albumBox.Location  = new Point(rx, y + 2 * 36);
 
-        Row("Parça Adı:", _titleBox,  0);
-        Row("Sanatçı:",   _artistBox, 1);
-        Row("Albüm:",     _albumBox,  2);
-        Row("Çalındı:",   _datePicker, 3);
+        Row(Loc.T("LblTrackName"), _titleBox,   0);
+        Row(Loc.T("LblArtist"),   _artistBox,  1);
+        Row(Loc.T("LblAlbum"),    _albumBox,   2);
+        Row(Loc.T("LblPlayedAt"), _datePicker, 3);
         Controls.Add(_datePicker);
 
         int by = y + 4 * 36 + 4;
@@ -92,7 +94,7 @@ public class ManualScrobbleForm : Form
             var a = _artistBox.Text.Trim();
             if (string.IsNullOrEmpty(t) || string.IsNullOrEmpty(a))
             {
-                MessageBox.Show("Parça adı ve sanatçı gereklidir.", "Eksik Bilgi",
+                MessageBox.Show(Loc.T("MsgTrackArtistRequired"), Loc.T("TitleMissingInfo"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -106,7 +108,7 @@ public class ManualScrobbleForm : Form
 
         var cancelBtn = new Button
         {
-            Text         = "İptal",
+            Text         = Loc.T("Cancel"),
             Location     = new Point(rx + 110, by),
             Size         = new Size(80, 30),
             FlatStyle    = FlatStyle.Flat,

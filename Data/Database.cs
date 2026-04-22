@@ -83,6 +83,7 @@ public class Database : IDisposable
                 case "show_now_playing_notif": settings.ShowNowPlayingNotification = value == "1"; break;
                 case "duplicate_window_min": settings.DuplicateWindowMinutes = int.TryParse(value, out var dw) ? dw : 5; break;
                 case "accent_color": settings.AccentColor = value ?? "#BA0000"; break;
+                case "language": settings.Language = value ?? "en"; break;
             }
         }
         return settings;
@@ -108,6 +109,7 @@ public class Database : IDisposable
         Set("show_now_playing_notif", s.ShowNowPlayingNotification ? "1" : "0");
         Set("duplicate_window_min", s.DuplicateWindowMinutes.ToString());
         Set("accent_color", s.AccentColor);
+        Set("language", s.Language);
     }
 
     // ── Normalization Rules ─────────────────────────────────────────────────
@@ -211,6 +213,53 @@ public class Database : IDisposable
         var today = (int)Scalar<long>("SELECT COUNT(*) FROM scrobble_history WHERE success=1 AND date(scrobbled_at)=date('now')");
         var week  = (int)Scalar<long>("SELECT COUNT(*) FROM scrobble_history WHERE success=1 AND scrobbled_at>=datetime('now','-7 days')");
         return (total, today, week);
+    }
+
+    public (string day, int count)[] GetDailyScrobbles(int days = 14)
+    {
+        var list = new List<(string, int)>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT date(scrobbled_at) as day, COUNT(*) as cnt
+            FROM scrobble_history
+            WHERE success=1 AND scrobbled_at >= datetime('now', @days)
+            GROUP BY day ORDER BY day";
+        cmd.Parameters.AddWithValue("@days", $"-{days} days");
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetInt32(1)));
+        return list.ToArray();
+    }
+
+    public (string artist, int count)[] GetTopArtists(int limit = 8)
+    {
+        var list = new List<(string, int)>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT artist, COUNT(*) as cnt
+            FROM scrobble_history
+            WHERE success=1
+            GROUP BY lower(artist)
+            ORDER BY cnt DESC LIMIT @lim";
+        cmd.Parameters.AddWithValue("@lim", limit);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetInt32(1)));
+        return list.ToArray();
+    }
+
+    public (string artist, string title, int count)[] GetTopTracks(int limit = 8)
+    {
+        var list = new List<(string, string, int)>();
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT artist, title, COUNT(*) as cnt
+            FROM scrobble_history
+            WHERE success=1
+            GROUP BY lower(artist), lower(title)
+            ORDER BY cnt DESC LIMIT @lim";
+        cmd.Parameters.AddWithValue("@lim", limit);
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.GetInt32(2)));
+        return list.ToArray();
     }
 
     // ── Pending Queue ───────────────────────────────────────────────────────
