@@ -26,4 +26,6 @@ public class AppSettings
     public int DuplicateWindowMinutes { get; set; } = 5;
 
     public string AccentColor { get; set; } = "#BA0000";
+
+    public string Language { get; set; } = "en";
 }

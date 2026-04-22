@@ -64,6 +64,7 @@ public class TrayApp : ApplicationContext
         _engine.NowPlayingChanged += OnNowPlayingChanged;
         _engine.TrackScrobbled   += OnTrackScrobbled;
 
+        _mainForm.ShowMonitor();
         _ = StartEngineAsync();
     }
 
