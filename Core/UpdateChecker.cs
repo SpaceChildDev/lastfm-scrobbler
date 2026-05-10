@@ -8,8 +8,17 @@ namespace LastFmScrobbler.Core;
 
 public class UpdateChecker
 {
-    public const string ManifestUrl  = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/latest.json";
-    public const string VersionsUrl  = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/versions.json";
+    // The R2 public URL (`pub-*.r2.dev`) is blocked / SSL-inspected on some
+    // networks. We route everything through our worker proxy on a custom
+    // domain — same one used for the Last.fm API.
+    private const string R2Base    = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev";
+    private const string ProxyBase = "https://proxy.lastfm.spacechild.dev";
+
+    public const string ManifestUrl  = ProxyBase + "/lastfm-scrobbler/latest.json";
+    public const string VersionsUrl  = ProxyBase + "/lastfm-scrobbler/versions.json";
+
+    private static string RewriteToProxy(string url) =>
+        url.StartsWith(R2Base) ? ProxyBase + url[R2Base.Length..] : url;
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
@@ -56,7 +65,7 @@ public class UpdateChecker
             Path.GetTempPath(),
             $"LastFmScrobbler-Setup-{info.Version}.exe");
 
-        using var response = await _http.GetAsync(info.Url, HttpCompletionOption.ResponseHeadersRead);
+        using var response = await _http.GetAsync(RewriteToProxy(info.Url), HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 
         var total = response.Content.Headers.ContentLength ?? 0;
