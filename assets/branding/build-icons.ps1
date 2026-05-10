@@ -40,7 +40,7 @@ function Render-Variant {
     $bounds = $geometry.Bounds
     $contentW = $bounds.Width
     $contentH = $bounds.Height
-    $pad     = if ($WithBg) { 0.22 } else { 0.08 }
+    $pad     = if ($WithBg) { 0.22 } else { 0.0 }
     $target  = $Size * (1 - 2 * $pad)
     $scale   = [Math]::Min($target / $contentW, $target / $contentH)
 
@@ -129,6 +129,11 @@ Build-Ico -Pngs $pngsB -Sizes $sizes -Out (Join-Path $here "app-white-on-red-cir
 # Also export 256px PNGs of each variant for previewing
 [System.IO.File]::WriteAllBytes((Join-Path $here "preview-red-on-transparent.png"), $pngsA[-1])
 [System.IO.File]::WriteAllBytes((Join-Path $here "preview-white-on-red-circle.png"), $pngsB[-1])
+
+# High-res transparent mark for embedding in the About page (replaces the ♪ glyph).
+$mark192 = Render-Variant -Size 192 -WithBg $false -IconColor $red -BgColor ([System.Windows.Media.Colors]::Transparent)
+[System.IO.File]::WriteAllBytes((Join-Path $here "mark-192.png"), $mark192)
+Write-Host "  wrote mark-192.png ($([Math]::Round($mark192.Length/1KB,1)) KB)" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "Done. Preview PNGs:" -ForegroundColor Green

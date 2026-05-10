@@ -59,4 +59,7 @@ Name: "{autodesktop}\{#AppName}";        Filename: "{app}\{#AppExeName}"; Tasks:
 Name: "{autostartup}\{#AppName}";        Filename: "{app}\{#AppExeName}"; Tasks: startupentry
 
 [Run]
+; Interactive install: show "Launch app" checkbox at the end of the wizard.
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Silent / auto-update: always launch the new exe so the user doesn't have to.
+Filename: "{app}\{#AppExeName}"; Flags: nowait runasoriginaluser; Check: WizardSilent

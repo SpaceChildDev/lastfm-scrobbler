@@ -730,14 +730,13 @@ public class MainForm : Form
             e.Graphics.DrawRectangle(pen, 0, 0, heroCard.Width - 1, heroCard.Height - 1);
         };
 
-        var noteLabel = new Label
+        var noteLabel = new PictureBox
         {
-            Text      = "♪",
-            Location  = new Point(20, 14),
-            Size      = new Size(58, 64),
-            Font      = FontManager.Bold(30f),
-            ForeColor = _cAccent,
-            TextAlign = ContentAlignment.MiddleCenter,
+            Location = new Point(20, 22),
+            Size     = new Size(58, 48),
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Image    = LoadEmbeddedImage("mark.png"),
+            BackColor = Color.Transparent,
         };
 
         var appNameLabel = new Label
@@ -914,6 +913,18 @@ public class MainForm : Form
             Math.Min(255, c.R + amount),
             Math.Min(255, c.G + amount),
             Math.Min(255, c.B + amount));
+
+    private static Image? LoadEmbeddedImage(string logicalName)
+    {
+        try
+        {
+            using var stream = typeof(MainForm).Assembly.GetManifestResourceStream(logicalName);
+            if (stream is null) return null;
+            using var orig = Image.FromStream(stream);
+            return new Bitmap(orig);
+        }
+        catch { return null; }
+    }
 
     // ── Normalization Page ────────────────────────────────────────────────────
 
