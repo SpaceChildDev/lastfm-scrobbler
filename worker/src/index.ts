@@ -5,6 +5,8 @@ interface Env {
   LASTFM_API_SECRET: string;
 }
 
+const R2_BASE = 'https://pub-8a5464b225534730b481b262ffe4748b.r2.dev';
+
 function md5hex(input: string): string {
   return Md5.hashStr(input);
 }
@@ -23,11 +25,26 @@ function buildSignature(params: Record<string, string>, secret: string): string 
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    // GET /lastfm-scrobbler/* → proxy to R2. Some networks (corporate
+    // firewalls, SSL-inspecting AVs) block *.r2.dev directly, but reach
+    // this worker fine because it's served from a custom domain.
+    if (request.method === 'GET' && url.pathname.startsWith('/lastfm-scrobbler/')) {
+      const upstream = await fetch(`${R2_BASE}${url.pathname}${url.search}`);
+      const headers  = new Headers(upstream.headers);
+      headers.set('Access-Control-Allow-Origin', '*');
+      if (url.pathname.endsWith('.json')) {
+        headers.set('Cache-Control', 'no-cache, no-store, max-age=0');
+      }
+      return new Response(upstream.body, { status: upstream.status, headers });
+    }
+
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Methods': 'GET, POST',
           'Access-Control-Allow-Headers': 'Content-Type',
         },
       });
