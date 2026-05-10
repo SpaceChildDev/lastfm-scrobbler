@@ -120,7 +120,6 @@ public class MainForm : Form
     private NavButton? _activeNavBtn;
     private readonly List<Button> _accentBtns = new();
 
-    private Button _maxBtn = null!;
     private bool   _externalCloseRequested;
 
     public MainForm(Database db, ScrobbleEngine engine, AppSettings settings)
@@ -158,7 +157,7 @@ public class MainForm : Form
         Size            = new Size(1100, 680);
         MinimumSize     = new Size(900, 560);
         StartPosition   = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.None;
+        FormBorderStyle = FormBorderStyle.Sizable;
         BackColor       = CMain;
         ForeColor       = CFg;
         Font            = FontManager.Regular(9.5f);
@@ -171,7 +170,6 @@ public class MainForm : Form
                 e.Cancel = true; Hide();
             }
         };
-        SizeChanged    += (_, _) => { if (_maxBtn != null) _maxBtn.Text = WindowState == FormWindowState.Maximized ? "❐" : "□"; };
         Load           += (_, _) => SizePages();
 
         var sidebar = new Panel { Dock = DockStyle.Left, Width = 200, BackColor = CSidebar };
@@ -236,11 +234,8 @@ public class MainForm : Form
         _content.Controls.AddRange([_pageMonitor, _pageHistory, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout]);
         _content.Resize += (_, _) => SizePages();
 
-        var titleBar = BuildTitleBar();
-
         Controls.Add(_content);
         Controls.Add(sidebar);
-        Controls.Add(titleBar);
     }
 
     private void SizePages()
@@ -1899,85 +1894,43 @@ public class MainForm : Form
         catch { }
     }
 
-    // ── Custom title bar ──────────────────────────────────────────────────────
+    // ── Native dark title bar (Win10 1809+ / Win11 22H2+) ────────────────────
 
-    private Panel BuildTitleBar()
+    protected override void OnHandleCreated(EventArgs e)
     {
-        var bar = new Panel { Dock = DockStyle.Top, Height = 48, BackColor = Color.FromArgb(10, 10, 10) };
-
-        var logoPane = new Panel { Dock = DockStyle.Left, Width = 200, BackColor = CSidebar };
-        var logoLbl  = new Label
-        {
-            Text = "last.fm Scrobbler", Dock = DockStyle.Fill, ForeColor = _cAccent,
-            Font = FontManager.Bold(11.5f), TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(20, 0, 0, 0), BackColor = Color.Transparent,
-        };
-        logoPane.Controls.Add(logoLbl);
-
-        var rightPane = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(16, 16, 16) };
-
-        var closeBtn = TitleBtn("✕", 46);
-        closeBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(196, 43, 28);
-        closeBtn.FlatAppearance.MouseDownBackColor = Color.FromArgb(150, 25, 10);
-        closeBtn.MouseEnter += (_, _) => closeBtn.ForeColor = Color.White;
-        closeBtn.MouseLeave += (_, _) => closeBtn.ForeColor = Color.FromArgb(150, 150, 150);
-        closeBtn.Click += (_, _) => Close();
-
-        _maxBtn = TitleBtn("□", 40);
-        _maxBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(38, 38, 38);
-        _maxBtn.Click += (_, _) =>
-        {
-            if (WindowState == FormWindowState.Maximized) WindowState = FormWindowState.Normal;
-            else { MaximizedBounds = Screen.GetWorkingArea(this); WindowState = FormWindowState.Maximized; }
-        };
-
-        var minBtn = TitleBtn("─", 40);
-        minBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(38, 38, 38);
-        minBtn.Click += (_, _) => WindowState = FormWindowState.Minimized;
-
-        rightPane.Controls.Add(minBtn);
-        rightPane.Controls.Add(_maxBtn);
-        rightPane.Controls.Add(closeBtn);
-
-        MouseEventHandler drag = (_, e) =>
-        {
-            if (e.Button != MouseButtons.Left) return;
-            ReleaseCapture();
-            SendMessage(Handle, 0xA1, (IntPtr)2, IntPtr.Zero);
-        };
-        bar.MouseDown += drag; logoPane.MouseDown += drag; logoLbl.MouseDown += drag; rightPane.MouseDown += drag;
-        bar.DoubleClick += (_, _) => _maxBtn.PerformClick();
-        rightPane.DoubleClick += (_, _) => _maxBtn.PerformClick();
-
-        bar.Controls.Add(rightPane);
-        bar.Controls.Add(logoPane);
-        return bar;
+        base.OnHandleCreated(e);
+        ApplyDarkTitleBar();
     }
 
-    private static Button TitleBtn(string symbol, int width) => new()
+    private void ApplyDarkTitleBar()
     {
-        Text = symbol, Size = new Size(width, 48), Dock = DockStyle.Right,
-        FlatStyle = FlatStyle.Flat, ForeColor = Color.FromArgb(150, 150, 150),
-        BackColor = Color.Transparent, Font = FontManager.Regular(10f),
-        UseVisualStyleBackColor = false, Cursor = Cursors.Default,
-        FlatAppearance = { BorderSize = 0, MouseDownBackColor = Color.FromArgb(32, 32, 32) },
-    };
+        // Win10 1809+: tells DWM to draw the system caption in dark mode.
+        // Newer SDKs renumbered the attribute (19 → 20); set both for safety.
+        TrySetDwmAttr(19, 1);
+        TrySetDwmAttr(20, 1);
 
-    // ── Resize + shadow ───────────────────────────────────────────────────────
-
-    protected override CreateParams CreateParams
-    {
-        get { var cp = base.CreateParams; cp.ClassStyle |= 0x00020000; return cp; }
+        // Win11 22H2+: override Windows accent so caption matches the app
+        // theme, regardless of the user's system accent color (blue, etc.).
+        // COLORREF = 0x00BBGGRR. CMain (#181818) and CFg (#DCDCDC) are
+        // grayscale, so the channel order doesn't matter.
+        TrySetDwmAttr(35, 0x181818); // DWMWA_CAPTION_COLOR
+        TrySetDwmAttr(34, 0x181818); // DWMWA_BORDER_COLOR
+        TrySetDwmAttr(36, 0xDCDCDC); // DWMWA_TEXT_COLOR
     }
+
+    private void TrySetDwmAttr(int attr, int value)
+    {
+        try { _ = DwmSetWindowAttribute(Handle, attr, ref value, sizeof(int)); }
+        catch { /* old Windows: attribute unsupported, falls back to defaults */ }
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
     protected override void WndProc(ref Message m)
     {
-        const int WM_NCHITTEST       = 0x84;
         const int WM_QUERYENDSESSION = 0x11;
         const int WM_ENDSESSION      = 0x16;
-        const int HTLEFT = 10, HTRIGHT = 11, HTTOPLEFT = 13, HTTOPRIGHT = 14;
-        const int HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
-        const int grip = 6;
 
         // Windows / Restart Manager / Inno Setup signal app to close.
         if (m.Msg == WM_QUERYENDSESSION || m.Msg == WM_ENDSESSION)
@@ -1987,19 +1940,6 @@ public class MainForm : Form
             BeginInvoke(() => Application.Exit());
         }
 
-        if (m.Msg == WM_NCHITTEST)
-        {
-            var p = PointToClient(Cursor.Position);
-            bool l = p.X < grip, r = p.X >= ClientSize.Width - grip;
-            bool t = p.Y < grip, b = p.Y >= ClientSize.Height - grip;
-            if (t && l) { m.Result = (IntPtr)HTTOPLEFT;     return; }
-            if (t && r) { m.Result = (IntPtr)HTTOPRIGHT;    return; }
-            if (b && l) { m.Result = (IntPtr)HTBOTTOMLEFT;  return; }
-            if (b && r) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
-            if (l)      { m.Result = (IntPtr)HTLEFT;        return; }
-            if (r)      { m.Result = (IntPtr)HTRIGHT;       return; }
-            if (b)      { m.Result = (IntPtr)HTBOTTOM;      return; }
-        }
         base.WndProc(ref m);
     }
 
@@ -2034,13 +1974,6 @@ public class MainForm : Form
             TextRenderer.DrawText(e.Graphics, Text,  Font, new Rectangle(50, 0, Width - 56, Height), ForeColor, tf | TextFormatFlags.Left);
         }
     }
-
-    // ── P/Invoke ──────────────────────────────────────────────────────────────
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool ReleaseCapture();
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
