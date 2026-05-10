@@ -102,7 +102,7 @@ Write-Host "Updating versions.json…" -ForegroundColor Cyan
 
 $versionsJsonPath = "$PSScriptRoot\versions.json"
 try {
-    $existing = (Invoke-WebRequest -Uri "$R2PublicUrl/lastfm-scrobbler/versions.json" -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
+    $existing = @((Invoke-WebRequest -Uri "$R2PublicUrl/lastfm-scrobbler/versions.json" -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json)
 } catch {
     $existing = @()
 }
@@ -115,8 +115,14 @@ $newEntry = [ordered]@{
 }
 
 # Prepend new entry, deduplicate by version, keep last 10
-$versions = @($newEntry) + @($existing | Where-Object { $_.version -ne $Version }) | Select-Object -First 10
-$versions | ConvertTo-Json | Set-Content $versionsJsonPath -Encoding utf8NoBOM
+$filtered  = @($existing | Where-Object { $_.version -ne $Version })
+$versions  = @(@($newEntry) + $filtered)
+if ($versions.Count -gt 10) { $versions = $versions[0..9] }
+
+# ConvertTo-Json unwraps single-item arrays into objects — force [ ... ] wrapping.
+$json = ConvertTo-Json -InputObject $versions -Depth 10
+if (-not $json.TrimStart().StartsWith("[")) { $json = "[$json]" }
+$json | Set-Content $versionsJsonPath -Encoding utf8NoBOM
 Write-Host "versions.json updated ($($versions.Count) entries)." -ForegroundColor Green
 
 cmd /c "npx --prefix `"$workerDir`" wrangler r2 object put $BucketName/lastfm-scrobbler/versions.json --file `"$versionsJsonPath`" --content-type application/json --cache-control no-cache,no-store --remote 2>&1"
