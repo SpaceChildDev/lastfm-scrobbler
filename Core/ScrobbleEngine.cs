@@ -88,6 +88,8 @@ public class ScrobbleEngine : IDisposable
             {
                 _currentTrack = null;
                 NowPlayingChanged?.Invoke(this, null);
+                if (_settings.WebhookOnNowPlaying)
+                    WebhookClient.Post(_settings.WebhookUrl, "stopped", null);
                 return;
             }
 
@@ -97,6 +99,8 @@ public class ScrobbleEngine : IDisposable
             var gen = ++_trackGeneration;
 
             NowPlayingChanged?.Invoke(this, track);
+            if (_settings.WebhookOnNowPlaying)
+                WebhookClient.Post(_settings.WebhookUrl, "now_playing", track);
             _ = ResolveAlbumThenProceedAsync(track, gen);
         }
     }
@@ -240,6 +244,8 @@ public class ScrobbleEngine : IDisposable
         });
 
         TrackScrobbled?.Invoke(this, (scrobbleTrack, success));
+        if (_settings.WebhookOnScrobble)
+            WebhookClient.Post(_settings.WebhookUrl, "scrobbled", scrobbleTrack, success);
     }
 
     // ── Manual Scrobble ───────────────────────────────────────────────────────

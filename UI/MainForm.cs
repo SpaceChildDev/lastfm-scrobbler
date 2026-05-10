@@ -83,6 +83,9 @@ public class MainForm : Form
     private CheckBox _editBeforeChk    = null!;
     private CheckBox _showNotifChk     = null!;
     private CheckBox _startWinChk      = null!;
+    private TextBox  _webhookUrlBox    = null!;
+    private CheckBox _webhookScrobbleChk    = null!;
+    private CheckBox _webhookNowPlayingChk  = null!;
 
     // Normalization page
     private CheckBox     _autoNormChk = null!;
@@ -607,6 +610,31 @@ public class MainForm : Form
         _profileLink.Location     = new Point(lx, y); inner.Controls.Add(_profileLink);     y += 32;
         _authBtn.Location         = new Point(lx, y); inner.Controls.Add(_authBtn);
 
+        y += 52;
+        inner.Controls.Add(new Label
+        {
+            Text = "APP VERSION", Location = new Point(lx, y), Size = new Size(300, 18),
+            ForeColor = Color.FromArgb(70, 70, 70), Font = FontManager.Bold(8f),
+        });
+        y += 22;
+        inner.Controls.Add(new Label
+        {
+            Text      = $"v{Application.ProductVersion}",
+            Location  = new Point(lx, y),
+            Size      = new Size(200, 22),
+            ForeColor = Color.FromArgb(180, 180, 180),
+            Font      = FontManager.Regular(9.5f),
+        });
+
+        var versionHistoryBtn = MakeBtn("Version History", 150, 32);
+        versionHistoryBtn.Location = new Point(lx + 120, y - 4);
+        versionHistoryBtn.Click   += (_, _) =>
+        {
+            using var form = new VersionHistoryForm(new UpdateChecker(), _cAccent);
+            form.ShowDialog(this);
+        };
+        inner.Controls.Add(versionHistoryBtn);
+
         _pageAccount.Controls.Add(inner);
         _pageAccount.Controls.Add(heading);
     }
@@ -684,6 +712,36 @@ public class MainForm : Form
             Text = "Hotkeys:  Ctrl+Alt+L  →  Love/unlove track      Ctrl+Alt+C  →  Copy now playing",
             Location = new Point(lx, y), Size = new Size(600, 20), ForeColor = Color.FromArgb(70, 70, 70), Font = FontManager.Regular(8.5f),
         });
+
+        // Webhook section
+        y += 32;
+        inner.Controls.Add(new Label
+        {
+            Text = "WEBHOOKS", Location = new Point(lx, y), Size = new Size(300, 18),
+            ForeColor = Color.FromArgb(70, 70, 70), Font = FontManager.Bold(8f),
+        });
+        y += 22;
+
+        _webhookUrlBox = new TextBox
+        {
+            Location    = new Point(lx, y),
+            Size        = new Size(500, 26),
+            BackColor   = CInput,
+            ForeColor   = CFg,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font        = FontManager.Regular(9.5f),
+            PlaceholderText = "https://your-webhook-url",
+        };
+        inner.Controls.Add(_webhookUrlBox);
+        y += 34;
+
+        _webhookScrobbleChk   = MakeChk("Post on scrobble");
+        _webhookNowPlayingChk = MakeChk("Post on now playing / stopped");
+
+        foreach (var chk in new CheckBox[] { _webhookScrobbleChk, _webhookNowPlayingChk })
+        {
+            chk.Location = new Point(lx, y); inner.Controls.Add(chk); y += 28;
+        }
 
         _pageScrobble.Controls.Add(inner);
         _pageScrobble.Controls.Add(heading);
@@ -1409,6 +1467,9 @@ public class MainForm : Form
         _showNotifChk.Checked   = _settings.ShowNowPlayingNotification;
         _startWinChk.Checked    = _settings.StartWithWindows;
         _autoNormChk.Checked    = _settings.AutoNormalize;
+        _webhookUrlBox.Text          = _settings.WebhookUrl;
+        _webhookScrobbleChk.Checked   = _settings.WebhookOnScrobble;
+        _webhookNowPlayingChk.Checked = _settings.WebhookOnNowPlaying;
         var langIdx = Loc.Available.ToList().FindIndex(l => l.Code == _settings.Language);
         _langCombo.SelectedIndex = langIdx >= 0 ? langIdx : 0;
         UpdateAuthStatus();
@@ -1457,6 +1518,9 @@ public class MainForm : Form
         _settings.ShowNowPlayingNotification  = _showNotifChk.Checked;
         _settings.StartWithWindows            = _startWinChk.Checked;
         _settings.DailyScrobbleGoal           = (int)_goalSpin.Value;
+        _settings.WebhookUrl                  = _webhookUrlBox.Text.Trim();
+        _settings.WebhookOnScrobble           = _webhookScrobbleChk.Checked;
+        _settings.WebhookOnNowPlaying         = _webhookNowPlayingChk.Checked;
         if (_langCombo.SelectedIndex >= 0)
         {
             var newLang = Loc.Available[_langCombo.SelectedIndex].Code;

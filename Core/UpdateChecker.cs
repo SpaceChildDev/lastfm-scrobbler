@@ -8,9 +8,8 @@ namespace LastFmScrobbler.Core;
 
 public class UpdateChecker
 {
-    // Update this constant to your R2 public URL after creating the bucket.
-    // Example: https://pub-XXXXXXXX.r2.dev  or  https://updates.yourdomain.com
-    public const string ManifestUrl = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/latest.json";
+    public const string ManifestUrl  = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/latest.json";
+    public const string VersionsUrl  = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/versions.json";
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
 
@@ -18,6 +17,7 @@ public class UpdateChecker
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     public record UpdateInfo(string Version, string Url, string Sha256);
+    public record VersionEntry(string Version, string Url, string Sha256, string Date);
 
     /// <summary>Returns update info if a newer version exists, or null if already up-to-date.</summary>
     public async Task<UpdateInfo?> CheckAsync()
@@ -74,6 +74,25 @@ public class UpdateChecker
         }
 
         return dest;
+    }
+
+    /// <summary>Returns all available versions from R2, newest first.</summary>
+    public async Task<List<VersionEntry>> GetVersionHistoryAsync()
+    {
+        try
+        {
+            var json = await _http.GetStringAsync(VersionsUrl);
+            var arr  = JArray.Parse(json);
+            return arr
+                .Select(o => new VersionEntry(
+                    o["version"]?.ToString() ?? "",
+                    o["url"]?.ToString()     ?? "",
+                    o["sha256"]?.ToString()  ?? "",
+                    o["date"]?.ToString()    ?? ""))
+                .Where(v => !string.IsNullOrEmpty(v.Version))
+                .ToList();
+        }
+        catch { return []; }
     }
 
     /// <summary>Launches the installer silently and signals the caller to exit.</summary>
