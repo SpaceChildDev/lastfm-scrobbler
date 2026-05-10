@@ -28,4 +28,8 @@ public class AppSettings
     public string Language { get; set; } = "en";
 
     public int DailyScrobbleGoal { get; set; } = 0;
+
+    public string WebhookUrl { get; set; } = "";
+    public bool WebhookOnScrobble { get; set; } = true;
+    public bool WebhookOnNowPlaying { get; set; } = false;
 }

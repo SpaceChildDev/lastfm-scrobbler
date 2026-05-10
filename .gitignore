@@ -2,6 +2,7 @@
 bin/
 obj/
 portable/
+.portable*/
 
 # Visual Studio / Rider
 .vs/
@@ -31,6 +32,11 @@ appsettings.local.*
 secrets.*
 dev.credentials
 *.credentials
+
+# Wrangler cache
+.wrangler/
+**/.wrangler/
+installer/versions.json
 
 # Worker
 worker/node_modules/

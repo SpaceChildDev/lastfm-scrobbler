@@ -96,7 +96,34 @@ Write-Host "Uploading latest.json to R2…" -ForegroundColor Cyan
 cmd /c "npx --prefix `"$workerDir`" wrangler r2 object put $BucketName/lastfm-scrobbler/latest.json --file `"$PSScriptRoot\latest.json`" --content-type application/json --cache-control no-cache,no-store --remote 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "R2 upload (manifest) failed" }
 
+# ── 7. Update versions.json ──────────────────────────────────────────────────
+
+Write-Host "Updating versions.json…" -ForegroundColor Cyan
+
+$versionsJsonPath = "$PSScriptRoot\versions.json"
+try {
+    $existing = (Invoke-WebRequest -Uri "$R2PublicUrl/lastfm-scrobbler/versions.json" -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json
+} catch {
+    $existing = @()
+}
+
+$newEntry = [ordered]@{
+    version = $Version
+    url     = "$R2PublicUrl/lastfm-scrobbler/$installerFilename"
+    sha256  = $sha256
+    date    = (Get-Date -Format "yyyy-MM-dd")
+}
+
+# Prepend new entry, deduplicate by version, keep last 10
+$versions = @($newEntry) + @($existing | Where-Object { $_.version -ne $Version }) | Select-Object -First 10
+$versions | ConvertTo-Json | Set-Content $versionsJsonPath -Encoding utf8NoBOM
+Write-Host "versions.json updated ($($versions.Count) entries)." -ForegroundColor Green
+
+cmd /c "npx --prefix `"$workerDir`" wrangler r2 object put $BucketName/lastfm-scrobbler/versions.json --file `"$versionsJsonPath`" --content-type application/json --cache-control no-cache,no-store --remote 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "R2 upload (versions.json) failed" }
+
 Write-Host ""
 Write-Host "✅ v$Version released and uploaded." -ForegroundColor Green
 Write-Host "   Manifest : $R2PublicUrl/lastfm-scrobbler/latest.json" -ForegroundColor Gray
+Write-Host "   Versions : $R2PublicUrl/lastfm-scrobbler/versions.json" -ForegroundColor Gray
 Write-Host "   Installer: $R2PublicUrl/lastfm-scrobbler/$installerFilename" -ForegroundColor Gray
