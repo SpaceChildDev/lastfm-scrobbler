@@ -130,7 +130,7 @@ public class UpdateDialog : Form
         _statusIcon.Text      = "✓";
         _statusIcon.ForeColor = Color.FromArgb(80, 200, 80);
         _statusTitle.Text     = "You're up to date";
-        _statusBody.Text      = $"Last.fm Scrobbler v{Application.ProductVersion} is the latest version.";
+        _statusBody.Text      = $"Last.fm Scrobbler v{UpdateChecker.DisplayVersion} is the latest version.";
         _progress.Visible     = false;
         _actionBtn.Visible    = false;
         _closeBtn.Text        = "Close";
@@ -142,7 +142,7 @@ public class UpdateDialog : Form
         _statusIcon.Text      = "↑";
         _statusIcon.ForeColor = _accent;
         _statusTitle.Text     = $"Update available — v{info.Version}";
-        _statusBody.Text      = $"You're on v{Application.ProductVersion}. Click Install to download and update now.";
+        _statusBody.Text      = $"You're on v{UpdateChecker.DisplayVersion}. Click Install to download and update now.";
         _progress.Visible     = false;
         _actionBtn.Text       = "Install";
         _actionBtn.Visible    = true;

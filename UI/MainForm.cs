@@ -775,7 +775,7 @@ public class MainForm : Form
 
         var versionLabel = new Label
         {
-            Text      = $"v{Application.ProductVersion}",
+            Text      = $"v{Core.UpdateChecker.DisplayVersion}",
             Location  = new Point(89, 52),
             Size      = new Size(72, 22),
             Font      = FontManager.Regular(8.5f),
@@ -855,7 +855,7 @@ public class MainForm : Form
 
         inner.Controls.Add(new Label
         {
-            Text      = $"v{Application.ProductVersion}",
+            Text      = $"v{Core.UpdateChecker.DisplayVersion}",
             Location  = new Point(lx, y),
             Size      = new Size(100, 22),
             Font      = FontManager.Regular(10f),
