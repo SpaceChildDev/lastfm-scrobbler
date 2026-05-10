@@ -36,7 +36,6 @@ dev.credentials
 # Wrangler cache
 .wrangler/
 **/.wrangler/
-installer/versions.json
 
 # Worker
 worker/node_modules/

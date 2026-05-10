@@ -19,28 +19,35 @@ public class UpdateChecker
     public record UpdateInfo(string Version, string Url, string Sha256);
     public record VersionEntry(string Version, string Url, string Sha256, string Date);
 
-    /// <summary>Returns update info if a newer version exists, or null if already up-to-date.</summary>
+    /// <summary>
+    /// Returns update info if a newer version exists, or null if already up-to-date.
+    /// Throws on network errors or malformed manifests so callers can distinguish
+    /// "no update" from "check failed".
+    /// </summary>
     public async Task<UpdateInfo?> CheckAsync()
     {
-        try
-        {
-            var json = await _http.GetStringAsync(ManifestUrl);
-            var obj  = JObject.Parse(json);
+        var json = await _http.GetStringAsync(ManifestUrl);
+        var obj  = JObject.Parse(json);
 
-            var versionStr = obj["version"]?.ToString();
-            var url        = obj["url"]?.ToString();
-            var sha256     = obj["sha256"]?.ToString();
+        var versionStr = obj["version"]?.ToString();
+        var url        = obj["url"]?.ToString();
+        var sha256     = obj["sha256"]?.ToString();
 
-            if (versionStr is null || url is null || sha256 is null) return null;
-            if (!Version.TryParse(versionStr, out var remote))     return null;
+        if (versionStr is null || url is null || sha256 is null)
+            throw new InvalidDataException("Update manifest is missing required fields.");
 
-            // Normalize both to 3 components (Major.Minor.Build) so "1.2.2" == "1.2.2.0"
-            var r3 = new Version(remote.Major,   remote.Minor,   Math.Max(remote.Build,    0));
-            var c3 = new Version(_current.Major, _current.Minor, Math.Max(_current.Build,  0));
-            return r3 > c3 ? new UpdateInfo(versionStr, url, sha256) : null;
-        }
-        catch { return null; }
+        if (!Version.TryParse(versionStr, out var remote))
+            throw new InvalidDataException($"Could not parse remote version: {versionStr}");
+
+        // Normalize both to 3 components (Major.Minor.Build) so "1.2.2" == "1.2.2.0"
+        var r3 = new Version(remote.Major,   remote.Minor,   Math.Max(remote.Build,    0));
+        var c3 = new Version(_current.Major, _current.Minor, Math.Max(_current.Build,  0));
+        return r3 > c3 ? new UpdateInfo(versionStr, url, sha256) : null;
     }
+
+    /// <summary>Clean assembly version (e.g. "1.2.5") for display, without source revision.</summary>
+    public static string DisplayVersion =>
+        _current.ToString(3);
 
     /// <summary>Downloads the installer to %TEMP%, verifies SHA-256, returns the local path.</summary>
     public async Task<string> DownloadAsync(UpdateInfo info, IProgress<int> progress)

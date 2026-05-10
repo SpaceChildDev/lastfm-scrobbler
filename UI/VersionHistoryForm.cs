@@ -22,7 +22,7 @@ public class VersionHistoryForm : Form
     {
         _checker        = checker;
         _accent         = accent;
-        _currentVersion = Application.ProductVersion ?? "";
+        _currentVersion = UpdateChecker.DisplayVersion;
         InitializeComponent();
         _ = LoadVersionsAsync();
     }

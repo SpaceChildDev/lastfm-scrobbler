@@ -1,0 +1,38 @@
+[
+  {
+    "version": "1.2.5",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.5.exe",
+    "sha256": "d22f3285f3761f6b388c36c20ee8c3621fb82b6b71f96d0e8980db16b396460c",
+    "date": "2026-05-10"
+  },
+  {
+    "version": "1.2.4",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.4.exe",
+    "sha256": "563032299e50a3dbbd932c74e301de3032eab3a29995060a84d75ad56fc8889e",
+    "date": "2026-05-10"
+  },
+  {
+    "version": "1.2.3",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.3.exe",
+    "sha256": "76f4f3aedbd7b276c7762ec0b769bf884e0d5b109a7aa6b6fc88680e126bc298",
+    "date": "2026-05-10"
+  },
+  {
+    "version": "1.2.2",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.2.exe",
+    "sha256": "6fb6ac78672785eec3d901ba7b353c54620b1d2adb18c84c7232335b698dbb20",
+    "date": "2026-05-10"
+  },
+  {
+    "version": "1.2.1",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.1.exe",
+    "sha256": "683dee33f10daeb792de1835672966b0ed189ebec545173f9fa898b894fdb5ac",
+    "date": "2026-05-10"
+  },
+  {
+    "version": "1.2.0",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.0.exe",
+    "sha256": "c050cbef36cab46695114aee312baadc524d6cd98a807efee270c294eb8cb782",
+    "date": "2026-05-10"
+  }
+]

@@ -101,10 +101,27 @@ if ($LASTEXITCODE -ne 0) { throw "R2 upload (manifest) failed" }
 Write-Host "Updating versions.json…" -ForegroundColor Cyan
 
 $versionsJsonPath = "$PSScriptRoot\versions.json"
-try {
-    $existing = @((Invoke-WebRequest -Uri "$R2PublicUrl/lastfm-scrobbler/versions.json" -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json)
-} catch {
-    $existing = @()
+
+# Source-of-truth precedence: local file (committed to repo) → R2 → empty.
+# Local file is committed so history survives across machines/network failures.
+$existing = @()
+if (Test-Path $versionsJsonPath) {
+    try {
+        $existing = @((Get-Content $versionsJsonPath -Raw) | ConvertFrom-Json)
+        Write-Host "  Loaded $($existing.Count) entries from local versions.json." -ForegroundColor Gray
+    } catch {
+        Write-Host "  Local versions.json invalid, falling back to R2." -ForegroundColor Yellow
+        $existing = @()
+    }
+}
+if ($existing.Count -eq 0) {
+    try {
+        $existing = @((Invoke-WebRequest -Uri "$R2PublicUrl/lastfm-scrobbler/versions.json" -UseBasicParsing -ErrorAction Stop).Content | ConvertFrom-Json)
+        Write-Host "  Loaded $($existing.Count) entries from R2." -ForegroundColor Gray
+    } catch {
+        Write-Host "  No prior versions.json found, starting fresh." -ForegroundColor Yellow
+        $existing = @()
+    }
 }
 
 $newEntry = [ordered]@{
