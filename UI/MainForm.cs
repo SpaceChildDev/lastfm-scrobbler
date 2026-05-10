@@ -21,17 +21,16 @@ public class MainForm : Form
 
     private NavButton _btnMonitor  = null!;
     private NavButton _btnHistory  = null!;
-    private NavButton _btnAccount  = null!;
     private NavButton _btnScrobble = null!;
     private NavButton _btnNorm     = null!;
     private NavButton _btnStats    = null!;
     private NavButton _btnFriends  = null!;
     private NavButton _btnAbout    = null!;
+    private ProfileCard _profileCard = null!;
 
     private Panel _content      = null!;
     private Panel _pageMonitor  = null!;
     private Panel _pageHistory  = null!;
-    private Panel _pageAccount  = null!;
     private Panel _pageScrobble = null!;
     private Panel _pageNorm     = null!;
     private Panel _pageStats    = null!;
@@ -71,10 +70,7 @@ public class MainForm : Form
     private int      _threshMs;
     private bool     _scrobbled;
 
-    // Account page
-    private Label     _authStatusLabel = null!;
-    private Button    _authBtn         = null!;
-    private LinkLabel _profileLink     = null!;
+    // (Account UI moved into the sidebar's ProfileCard)
 
     // Scrobbling page
     private NumericUpDown _threshPct    = null!;
@@ -135,7 +131,6 @@ public class MainForm : Form
         InitializeComponent();
         BuildMonitorPage();
         BuildHistoryPage();
-        BuildAccountPage();
         BuildScrobblePage();
         BuildNormPage();
         BuildStatsPage();
@@ -185,7 +180,6 @@ public class MainForm : Form
         _btnHistory  = NavBtn(Loc.T("NavHistory"),       "◎");
         _btnStats    = NavBtn(Loc.T("NavStats"),          "∑");
         _btnFriends  = NavBtn("Friends",                  "☆");
-        _btnAccount  = NavBtn(Loc.T("NavAccount"),       "◉");
         _btnScrobble = NavBtn(Loc.T("NavScrobbling"),    "⚙");
         _btnNorm     = NavBtn(Loc.T("NavNormalization"), "≡");
         _btnAbout    = NavBtn("About",                   "◈");
@@ -194,10 +188,12 @@ public class MainForm : Form
         _btnHistory.Click  += (_, _) => { Navigate(_pageHistory,  _btnHistory);  LoadHistory(); RefreshStats(); };
         _btnStats.Click    += (_, _) => { Navigate(_pageStats,    _btnStats);    LoadStatsPage(); };
         _btnFriends.Click  += (_, _) => { Navigate(_pageFriends,  _btnFriends);  _ = RefreshFriendsAsync(); };
-        _btnAccount.Click  += (_, _) => Navigate(_pageAccount,  _btnAccount);
         _btnScrobble.Click += (_, _) => Navigate(_pageScrobble, _btnScrobble);
         _btnNorm.Click     += (_, _) => Navigate(_pageNorm,     _btnNorm);
         _btnAbout.Click    += (_, _) => Navigate(_pageAbout,    _btnAbout);
+
+        _profileCard          = new ProfileCard { Dock = DockStyle.Bottom };
+        _profileCard.Click   += (_, _) => ProfileClicked();
 
         var bugBtn = new Button
         {
@@ -218,10 +214,10 @@ public class MainForm : Form
         bugBtn.Click += (_, _) => OpenUrl("mailto:support@spacechild.dev?subject=Last.fm%20Scrobbler%20Bug");
 
         sidebar.Controls.Add(bugBtn);
+        sidebar.Controls.Add(_profileCard);
         sidebar.Controls.Add(_btnAbout);
         sidebar.Controls.Add(_btnNorm);
         sidebar.Controls.Add(_btnScrobble);
-        sidebar.Controls.Add(_btnAccount);
         sidebar.Controls.Add(_btnFriends);
         sidebar.Controls.Add(_btnStats);
         sidebar.Controls.Add(_btnHistory);
@@ -231,14 +227,13 @@ public class MainForm : Form
 
         _pageMonitor  = new Panel { BackColor = CMain, Visible = false, Padding = new Padding(24, 16, 24, 12) };
         _pageHistory  = new Panel { BackColor = CMain, Visible = false };
-        _pageAccount  = new Panel { BackColor = CMain, Visible = false };
         _pageScrobble = new Panel { BackColor = CMain, Visible = false };
         _pageNorm     = new Panel { BackColor = CMain, Visible = false };
         _pageStats    = new Panel { BackColor = CMain, Visible = false };
         _pageFriends  = new Panel { BackColor = CMain, Visible = false };
         _pageAbout    = new Panel { BackColor = CMain, Visible = false };
 
-        _content.Controls.AddRange([_pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout]);
+        _content.Controls.AddRange([_pageMonitor, _pageHistory, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout]);
         _content.Resize += (_, _) => SizePages();
 
         var titleBar = BuildTitleBar();
@@ -251,15 +246,15 @@ public class MainForm : Form
     private void SizePages()
     {
         var r = _content.ClientRectangle;
-        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout })
+        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout })
             p.Bounds = r;
     }
 
     private void Navigate(Panel page, NavButton btn)
     {
-        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageAccount, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout })
+        foreach (var p in new[] { _pageMonitor, _pageHistory, _pageScrobble, _pageNorm, _pageStats, _pageFriends, _pageAbout })
             p.Visible = false;
-        foreach (var b in new[] { _btnMonitor, _btnHistory, _btnStats, _btnFriends, _btnAccount, _btnScrobble, _btnNorm, _btnAbout })
+        foreach (var b in new[] { _btnMonitor, _btnHistory, _btnStats, _btnFriends, _btnScrobble, _btnNorm, _btnAbout })
         { b.BackColor = Color.Transparent; b.ForeColor = CDim; }
         page.Visible  = true;
         btn.BackColor = _cAccent;
@@ -281,7 +276,7 @@ public class MainForm : Form
         Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();
-        Navigate(_pageAccount, _btnAccount);
+        Navigate(_pageScrobble, _btnScrobble);
     }
 
     public void ToggleLoveCurrentTrack()
@@ -600,34 +595,6 @@ public class MainForm : Form
         RefreshStats();
         RefreshMonitorStats();
         MessageBox.Show($"Imported {count} new scrobbles.", "Import Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
-    // ── Account Page ──────────────────────────────────────────────────────────
-
-    private void BuildAccountPage()
-    {
-        const int lx = 24;
-        int y = 16;
-
-        _authStatusLabel = new Label { Size = new Size(540, 24), ForeColor = CDim, Font = FontManager.Regular(9f) };
-
-        _profileLink = new LinkLabel { Size = new Size(240, 20), Font = FontManager.Regular(9f), LinkColor = _cAccent, ForeColor = CDim, Visible = false };
-        _profileLink.LinkClicked += (_, _) => { if (!string.IsNullOrEmpty(_settings.Username)) OpenUrl($"https://www.last.fm/user/{_settings.Username}"); };
-
-        _authBtn = MakeBtn(Loc.T("LoginWithLastFm"), 170, 32);
-        _authBtn.Click += AuthClicked;
-
-        var heading = PageHeading(Loc.T("NavAccount"));
-        heading.Dock = DockStyle.Top;
-
-        var inner = new Panel { Dock = DockStyle.Fill, BackColor = CMain };
-
-        _authStatusLabel.Location = new Point(lx, y); inner.Controls.Add(_authStatusLabel); y += 30;
-        _profileLink.Location     = new Point(lx, y); inner.Controls.Add(_profileLink);     y += 32;
-        _authBtn.Location         = new Point(lx, y); inner.Controls.Add(_authBtn);
-
-        _pageAccount.Controls.Add(inner);
-        _pageAccount.Controls.Add(heading);
     }
 
     // ── Scrobbling Page ───────────────────────────────────────────────────────
@@ -1670,25 +1637,89 @@ public class MainForm : Form
         UpdateAuthStatus();
     }
 
-    private void UpdateAuthStatus()
+    private void UpdateAuthStatus() => _ = RefreshProfileCardAsync();
+
+    private async Task RefreshProfileCardAsync()
     {
-        if (!string.IsNullOrEmpty(_settings.SessionKey))
+        if (string.IsNullOrEmpty(_settings.SessionKey) || string.IsNullOrEmpty(_settings.Username))
         {
-            _authStatusLabel.Text      = string.Format(Loc.T("LoggedInAs"), _settings.Username ?? "?");
-            _authStatusLabel.ForeColor = Color.FromArgb(80, 200, 80);
-            _authBtn.Text              = Loc.T("LogInAgain");
-            _profileLink.Text          = $"last.fm/user/{_settings.Username} →";
-            _profileLink.Visible       = true;
-            _profileLink.Links.Clear();
-            _profileLink.Links.Add(0, _profileLink.Text.Length);
+            _profileCard.SetState(loggedIn: false, username: "", subtitle: "Sign in to Last.fm", avatar: null);
+            return;
         }
-        else
+
+        _profileCard.SetState(loggedIn: true, username: _settings.Username!, subtitle: "Last.fm", avatar: null);
+
+        try
         {
-            _authStatusLabel.Text      = Loc.T("NotLoggedIn");
-            _authStatusLabel.ForeColor = Color.FromArgb(220, 80, 80);
-            _authBtn.Text              = Loc.T("LoginWithLastFm");
-            _profileLink.Visible       = false;
+            var info = await _engine.LastFmClient.GetUserInfoAsync(_settings.Username!);
+            Image? avatar = null;
+            if (!string.IsNullOrEmpty(info.avatarUrl))
+            {
+                using var http  = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                var bytes       = await http.GetByteArrayAsync(info.avatarUrl);
+                using var ms    = new MemoryStream(bytes);
+                using var orig  = Image.FromStream(ms);
+                avatar          = new Bitmap(orig);
+            }
+            var subtitle = info.playcount > 0 ? $"{info.playcount:N0} scrobbles" : "Last.fm";
+            if (InvokeRequired) Invoke(() => _profileCard.SetState(true, info.name, subtitle, avatar));
+            else                _profileCard.SetState(true, info.name, subtitle, avatar);
         }
+        catch { /* keep initial fallback */ }
+    }
+
+    private void ProfileClicked()
+    {
+        if (string.IsNullOrEmpty(_settings.SessionKey))
+        {
+            AuthClicked(this, EventArgs.Empty);
+            return;
+        }
+
+        var menu = new ContextMenuStrip
+        {
+            BackColor = Color.FromArgb(24, 24, 24),
+            ForeColor = CFg,
+            Renderer  = new ToolStripProfessionalRenderer(new DarkMenuColors()),
+            Font      = FontManager.Regular(9.5f),
+        };
+
+        var profileItem = new ToolStripMenuItem("View profile") { ForeColor = CFg };
+        profileItem.Click += (_, _) =>
+        {
+            if (!string.IsNullOrEmpty(_settings.Username))
+                OpenUrl($"https://www.last.fm/user/{_settings.Username}");
+        };
+
+        var logoutItem = new ToolStripMenuItem("Log out") { ForeColor = CFg };
+        logoutItem.Click += (_, _) => LogOut();
+
+        menu.Items.Add(profileItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(logoutItem);
+        menu.Show(_profileCard, new Point(8, -menu.Height));
+    }
+
+    private void LogOut()
+    {
+        _settings.SessionKey = null;
+        _settings.Username   = null;
+        _db.SaveSettings(_settings);
+        _engine.UpdateSettings(_settings);
+        UpdateAuthStatus();
+    }
+
+    private sealed class DarkMenuColors : ProfessionalColorTable
+    {
+        public override Color MenuItemSelected      => Color.FromArgb(40, 40, 40);
+        public override Color MenuItemBorder        => Color.FromArgb(40, 40, 40);
+        public override Color MenuBorder            => Color.FromArgb(40, 40, 40);
+        public override Color ToolStripDropDownBackground => Color.FromArgb(24, 24, 24);
+        public override Color ImageMarginGradientBegin    => Color.FromArgb(24, 24, 24);
+        public override Color ImageMarginGradientMiddle   => Color.FromArgb(24, 24, 24);
+        public override Color ImageMarginGradientEnd      => Color.FromArgb(24, 24, 24);
+        public override Color SeparatorDark               => Color.FromArgb(40, 40, 40);
+        public override Color SeparatorLight              => Color.FromArgb(40, 40, 40);
     }
 
     private void LoadRules()
