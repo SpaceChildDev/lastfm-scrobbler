@@ -70,3 +70,9 @@
 ### Custom Domain for Updates
 - R2 currently at `pub-8a5464b225534730b481b262ffe4748b.r2.dev`
 - Move to `updates.lastfm.spacechild.dev` (add CNAME in Cloudflare, update `UpdateChecker.ManifestUrl` + `build.ps1`)
+
+### Friends page redesign
+- Currently a thin list. Pull each friend's profile picture via `user.getInfo` and arrange as grid of avatar cards (avatar + username + last scrobbled track + "X minutes ago").
+- Click an avatar → open their last.fm profile in browser.
+- Optional: show a small "♥ now playing" indicator if the friend is currently listening (`user.getRecentTracks` with `nowplaying=true`).
+- Cache avatars locally to avoid refetching on every page open.
