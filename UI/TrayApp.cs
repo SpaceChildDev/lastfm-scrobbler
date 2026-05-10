@@ -87,90 +87,55 @@ public class TrayApp : ApplicationContext
     // ── Update ────────────────────────────────────────────────────────────────
 
     private UpdateChecker.UpdateInfo? _pendingUpdate;
+    private bool _updateDialogOpen;
 
     private async Task CheckForUpdateAsync(bool onStartup = false)
     {
         if (onStartup) await Task.Delay(TimeSpan.FromSeconds(5));
 
-        if (_tray.ContextMenuStrip!.InvokeRequired)
-            _tray.ContextMenuStrip.Invoke(() => { _updateItem.Text = "Checking for updates…"; _updateItem.Enabled = false; });
-        else
-            { _updateItem.Text = "Checking for updates…"; _updateItem.Enabled = false; }
-
-        UpdateChecker.UpdateInfo? info = null;
-        bool networkError = false;
+        UpdateChecker.UpdateInfo? info;
         try { info = await _updater.CheckAsync(); }
-        catch { networkError = true; }
+        catch { info = null; }
 
         void Apply()
         {
             _updateItem.Enabled = true;
-            if (networkError)
-            {
-                _updateItem.Text = "Check for Updates";
-                if (!onStartup)
-                    _tray.ShowBalloonTip(4000, "Update check failed", "Could not reach the update server.", ToolTipIcon.Warning);
-                return;
-            }
+            _pendingUpdate      = info;
+            _updateItem.Text    = info is null ? "Check for Updates" : $"Install Update v{info.Version}…";
 
-            if (info is null)
-            {
-                _updateItem.Text = "Check for Updates";
-                if (!onStartup)
-                    _tray.ShowBalloonTip(3000, "You're up to date", $"Last.fm Scrobbler v{Application.ProductVersion} is the latest version.", ToolTipIcon.Info);
-                _pendingUpdate = null;
-                return;
-            }
-
-            _pendingUpdate     = info;
-            _updateItem.Text   = $"Install Update v{info.Version}…";
-            _tray.ShowBalloonTip(
-                8000,
-                "Update available",
-                $"Last.fm Scrobbler v{info.Version} is ready. Right-click the tray icon to install.",
-                ToolTipIcon.Info);
+            // Always show dialog when an update is found — balloon tips can be
+            // suppressed by Windows Focus Assist or notification settings, but
+            // a dialog is always visible to the user.
+            if (info is not null && !_updateDialogOpen)
+                ShowUpdateDialog(info);
         }
 
         if (_tray.ContextMenuStrip!.InvokeRequired) _tray.ContextMenuStrip.Invoke(Apply);
         else Apply();
     }
 
-    private async void OnUpdateItemClicked(object? sender, EventArgs e)
+    private void OnUpdateItemClicked(object? sender, EventArgs e)
     {
-        if (_pendingUpdate is null)
-        {
-            await CheckForUpdateAsync(onStartup: false);
-            return;
-        }
-
-        await DoInstallAsync(_pendingUpdate);
+        ShowUpdateDialog(_pendingUpdate);
     }
 
-    private async Task DoInstallAsync(UpdateChecker.UpdateInfo info)
+    private void ShowUpdateDialog(UpdateChecker.UpdateInfo? preFound)
     {
-        _updateItem.Text    = "Downloading…";
-        _updateItem.Enabled = false;
+        if (_updateDialogOpen) return;
 
-        try
-        {
-            var progress = new Progress<int>(pct =>
-            {
-                if (_tray.ContextMenuStrip!.InvokeRequired)
-                    _tray.ContextMenuStrip.Invoke(() => _updateItem.Text = $"Downloading… {pct}%");
-                else
-                    _updateItem.Text = $"Downloading… {pct}%";
-            });
+        var accent = ParseAccent(_settings.AccentColor);
+        var dlg    = new UpdateDialog(_updater, accent, preFound);
+        _updateDialogOpen = true;
+        dlg.FormClosed += (_, _) => _updateDialogOpen = false;
+        dlg.Show();
+        dlg.BringToFront();
+        dlg.Activate();
+    }
 
-            var path = await _updater.DownloadAsync(info, progress);
-            UpdateChecker.LaunchAndExit(path);
-            ExitApp();
-        }
-        catch (Exception ex)
-        {
-            _updateItem.Text    = $"Install Update v{info.Version}…";
-            _updateItem.Enabled = true;
-            _tray.ShowBalloonTip(5000, "Update failed", ex.Message, ToolTipIcon.Error);
-        }
+    private static Color ParseAccent(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return Color.FromArgb(186, 0, 0);
+        try { return ColorTranslator.FromHtml(hex); } catch { return Color.FromArgb(186, 0, 0); }
     }
 
     // ── Engine & tray ─────────────────────────────────────────────────────────
