@@ -205,6 +205,28 @@ public class LastFmClient
         catch { return []; }
     }
 
+    public async Task<(string name, string avatarUrl, int playcount)> GetUserInfoAsync(string username)
+    {
+        try
+        {
+            var result = await CallAsync(new Dictionary<string, string>
+            {
+                ["method"] = "user.getInfo",
+                ["user"]   = username,
+            }, signed: false);
+
+            var name = result.SelectToken("user.name")?.ToString() ?? username;
+            var images = result.SelectToken("user.image") as Newtonsoft.Json.Linq.JArray;
+            var avatar = images?
+                .Reverse()
+                .Select(i => i["#text"]?.ToString())
+                .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "";
+            int.TryParse(result.SelectToken("user.playcount")?.ToString(), out var pc);
+            return (name, avatar, pc);
+        }
+        catch { return (username, "", 0); }
+    }
+
     // ── User Stats ───────────────────────────────────────────────────────────
 
     public async Task<(string name, int playcount)[]> GetUserTopArtistsAsync(string username, string period, int limit = 10)
