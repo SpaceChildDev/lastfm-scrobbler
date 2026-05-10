@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.2.10",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.10.exe",
+    "sha256": "e392de3d7e15d464a8728054012478d12f995ceb5b5119f978fce5edfc82b373",
+    "date": "2026-05-10"
+  },
+  {
     "version": "1.2.9",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.9.exe",
     "sha256": "31ecdc4ffd5101e29b4839749e3ff7167baebdf8c63ff3de246a79c3d4b7fb4c",
@@ -51,12 +57,6 @@
     "version": "1.2.1",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.1.exe",
     "sha256": "683dee33f10daeb792de1835672966b0ed189ebec545173f9fa898b894fdb5ac",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.0",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.0.exe",
-    "sha256": "c050cbef36cab46695114aee312baadc524d6cd98a807efee270c294eb8cb782",
     "date": "2026-05-10"
   }
 ]

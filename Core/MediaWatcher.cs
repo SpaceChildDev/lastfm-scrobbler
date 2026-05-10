@@ -18,6 +18,13 @@ public class MediaWatcher : IDisposable
     private readonly object _raiseLock = new();
     private bool _disposed;
 
+    // Apple Music briefly emits Stopped between tracks (~200-800 ms). If we
+    // propagate that null immediately, the engine clears _currentTrack and a
+    // duplicate "now playing" log entry shows up when the next event arrives.
+    // Debounce nulls so a real track that follows can cancel the empty event.
+    private System.Threading.Timer? _nullDebounce;
+    private const int NullDebounceMs = 1500;
+
     public async Task StartAsync(bool filterAppleMusicOnly)
     {
         _filterAppleMusicOnly = filterAppleMusicOnly;
@@ -200,10 +207,38 @@ public class MediaWatcher : IDisposable
 
     private void RaiseTrackChanged(Track? track)
     {
+        if (track is null)
+        {
+            // Don't propagate yet — schedule a delayed fire that a real track
+            // arriving within NullDebounceMs can cancel.
+            lock (_raiseLock)
+            {
+                if (_lastTrack is null) return; // already in null state, nothing to debounce
+                _nullDebounce?.Dispose();
+                _nullDebounce = new System.Threading.Timer(_ =>
+                {
+                    Track? capturedLast;
+                    lock (_raiseLock)
+                    {
+                        capturedLast = _lastTrack;
+                        if (capturedLast is null) return;
+                        _lastTrack = null;
+                        _nullDebounce?.Dispose();
+                        _nullDebounce = null;
+                    }
+                    TrackChanged?.Invoke(this, null);
+                }, null, NullDebounceMs, System.Threading.Timeout.Infinite);
+            }
+            return;
+        }
+
         lock (_raiseLock)
         {
-            if (track is null && _lastTrack is null) return;
-            if (track is not null && track.IsSameTrack(_lastTrack)) return;
+            // A real track arrived — cancel any pending null fire.
+            _nullDebounce?.Dispose();
+            _nullDebounce = null;
+
+            if (track.IsSameTrack(_lastTrack)) return;
             _lastTrack = track;
         }
         TrackChanged?.Invoke(this, track);
@@ -237,6 +272,9 @@ public class MediaWatcher : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        _nullDebounce?.Dispose();
+        _nullDebounce = null;
 
         if (_session is not null)
         {
