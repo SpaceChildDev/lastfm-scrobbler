@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.2.16",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.16.exe",
+    "sha256": "e64e769d7a447b398ab5ee4d2a9793081e3f1f0c1a952ec25501b6dc5cc682aa",
+    "date": "2026-05-12",
+    "notes": [
+      "History redesigned as inbox-style list",
+      "Friends page now shows profile photos",
+      "Donate link updated",
+      "Fix: Version History always opens at top"
+    ]
+  },
+  {
     "version": "1.2.15",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.15.exe",
     "sha256": "ac60f630be39b6e84c9ae75e06e5a557c28d121a10990793f8ec33ad19979a76",
@@ -68,12 +80,6 @@
     "version": "1.2.7",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.7.exe",
     "sha256": "7cfd9e40a3066c0e94ad5ba6dbf41508619a686df3a5b8442a05bca37ffa37bb",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.6",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.6.exe",
-    "sha256": "4f239a04a7d397e747bdef1b5c35810b65bb708b314cd784f2d179748e0df1ec",
     "date": "2026-05-10"
   }
 ]
