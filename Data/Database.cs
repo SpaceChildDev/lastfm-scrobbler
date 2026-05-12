@@ -190,6 +190,23 @@ public class Database : IDisposable
         return list;
     }
 
+    public ScrobbleRecord? GetLastSuccessfulScrobble()
+    {
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT id, title, artist, album, scrobbled_at, success, error_message FROM scrobble_history WHERE success=1 ORDER BY id DESC LIMIT 1";
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        return new ScrobbleRecord
+        {
+            Id = r.GetInt32(0),
+            Title = r.GetString(1),
+            Artist = r.GetString(2),
+            Album = r.GetString(3),
+            ScrobbledAt = DateTime.Parse(r.GetString(4)),
+            Success = true,
+        };
+    }
+
     public bool WasRecentlyScrobbled(string artist, string title, int windowMinutes)
     {
         using var cmd = _conn.CreateCommand();

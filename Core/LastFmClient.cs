@@ -270,7 +270,7 @@ public class LastFmClient
 
     // ── Friends ──────────────────────────────────────────────────────────────
 
-    public async Task<(string name, string artist, string track, bool nowPlaying)[]> GetFriendsAsync(string username)
+    public async Task<(string name, string artist, string track, bool nowPlaying, string imageUrl)[]> GetFriendsAsync(string username)
     {
         try
         {
@@ -285,12 +285,15 @@ public class LastFmClient
             if (users is null) return [];
             return users.Select(u =>
             {
-                var name   = u["name"]?.ToString() ?? "";
-                var rt     = u["recenttrack"];
-                var artist = rt?["artist"]?["#text"]?.ToString() ?? "";
-                var track  = rt?["name"]?.ToString() ?? "";
-                var np     = rt?["@attr"]?["nowplaying"]?.ToString() == "true";
-                return (name, artist, track, np);
+                var name     = u["name"]?.ToString() ?? "";
+                var rt       = u["recenttrack"];
+                var artist   = rt?["artist"]?["#text"]?.ToString() ?? "";
+                var track    = rt?["name"]?.ToString() ?? "";
+                var np       = rt?["@attr"]?["nowplaying"]?.ToString() == "true";
+                var imageUrl = u["image"]?
+                    .LastOrDefault(i => !string.IsNullOrEmpty(i["#text"]?.ToString()))?
+                    ["#text"]?.ToString() ?? "";
+                return (name, artist, track, np, imageUrl);
             }).Where(x => x.name.Length > 0).ToArray();
         }
         catch { return []; }

@@ -92,7 +92,8 @@ public class TrayApp : ApplicationContext
     // ── Update ────────────────────────────────────────────────────────────────
 
     private UpdateChecker.UpdateInfo? _pendingUpdate;
-    private bool _updateDialogOpen;
+    private bool        _updateDialogOpen;
+    private UpdateDialog? _activeUpdateDialog;
 
     private async Task CheckForUpdateAsync(bool onStartup = false)
     {
@@ -126,12 +127,18 @@ public class TrayApp : ApplicationContext
 
     private void ShowUpdateDialog(UpdateChecker.UpdateInfo? preFound)
     {
-        if (_updateDialogOpen) return;
+        if (_updateDialogOpen)
+        {
+            _activeUpdateDialog?.BringToFront();
+            _activeUpdateDialog?.Activate();
+            return;
+        }
 
         var accent = ParseAccent(_settings.AccentColor);
         var dlg    = new UpdateDialog(_updater, accent, preFound);
-        _updateDialogOpen = true;
-        dlg.FormClosed += (_, _) => _updateDialogOpen = false;
+        _activeUpdateDialog = dlg;
+        _updateDialogOpen   = true;
+        dlg.FormClosed += (_, _) => { _updateDialogOpen = false; _activeUpdateDialog = null; };
         dlg.Show();
         dlg.BringToFront();
         dlg.Activate();

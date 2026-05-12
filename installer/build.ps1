@@ -19,8 +19,9 @@
     .\build.ps1 -Version 1.2.0 -BucketName lastfm-releases -R2PublicUrl https://pub-abc.r2.dev
 #>
 param(
-    [string]$Version    = "",
-    [string]$BucketName = "lastfm-releases",
+    [string]$Version     = "",
+    [string]$Notes       = "",   # semicolon-separated: "note1;note2;note3"
+    [string]$BucketName  = "lastfm-releases",
     [string]$R2PublicUrl = "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev"
 )
 
@@ -56,7 +57,9 @@ $iscc = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe",
     "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
-    "C:\Program Files\Inno Setup 7\ISCC.exe"
+    "C:\Program Files\Inno Setup 7\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { throw "Inno Setup not found — download from https://jrsoftware.org/isinfo.php" }
 
@@ -124,11 +127,13 @@ if ($existing.Count -eq 0) {
     }
 }
 
+$notesArray = if ($Notes) { @($Notes -split ";") } else { @() }
 $newEntry = [ordered]@{
     version = $Version
     url     = "$R2PublicUrl/lastfm-scrobbler/$installerFilename"
     sha256  = $sha256
     date    = (Get-Date -Format "yyyy-MM-dd")
+    notes   = $notesArray
 }
 
 # Prepend new entry, deduplicate by version, keep last 10

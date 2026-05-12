@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using LastFmScrobbler.Core;
 using LastFmScrobbler.Data;
 using LastFmScrobbler.Localization;
@@ -38,6 +39,7 @@ public class MainForm : Form
     private Panel _pageAbout    = null!;
 
     // Monitor page
+    private Label       _monNowLbl     = null!;
     private Label       _monTitle      = null!;
     private Label       _monArtist     = null!;
     private Label       _monAlbum      = null!;
@@ -90,11 +92,11 @@ public class MainForm : Form
     private DataGridView _rulesGrid   = null!;
 
     // History page
-    private Label        _statTotal   = null!;
-    private Label        _statToday   = null!;
-    private Label        _statWeek    = null!;
-    private Label        _statPending = null!;
-    private DataGridView _historyGrid = null!;
+    private Label       _statTotal   = null!;
+    private Label       _statToday   = null!;
+    private Label       _statWeek    = null!;
+    private Label       _statPending = null!;
+    private HistoryList _historyList = null!;
 
     // Stats page
     private Panel  _chartPanel    = null!;
@@ -115,6 +117,7 @@ public class MainForm : Form
     // Friends page
     private Panel _friendsListPanel = null!;
     private Label _friendsStatusLbl = null!;
+    private static readonly HttpClient _avatarClient = new();
 
     private Panel      _accentBar  = null!;
     private NavButton? _activeNavBtn;
@@ -146,6 +149,7 @@ public class MainForm : Form
         _tick.Start();
 
         if (_engine.CurrentTrack is Track t) OnNowPlaying(null, t);
+        else ShowLastPlayed();
         Navigate(_pageMonitor, _btnMonitor);
         RefreshMonitorStats();
     }
@@ -296,14 +300,14 @@ public class MainForm : Form
         artWrap.Controls.Add(_albumArt);
 
         var cardInner = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(18, 14, 14, 10) };
-        var nowLbl    = new Label { Dock = DockStyle.Top, Height = 18, Text = Loc.T("NowPlaying"), Font = FontManager.Bold(7.5f), ForeColor = Color.FromArgb(80, 80, 80), TextAlign = ContentAlignment.MiddleLeft };
+        _monNowLbl    = new Label { Dock = DockStyle.Top, Height = 18, Text = Loc.T("NowPlaying"), Font = FontManager.Bold(7.5f), ForeColor = Color.FromArgb(80, 80, 80), TextAlign = ContentAlignment.MiddleLeft };
         _monTitle  = new Label { Dock = DockStyle.Top, Height = 40, Font = FontManager.Bold(17f),   ForeColor = CFg,                           Text = "—", AutoEllipsis = true };
         _monArtist = new Label { Dock = DockStyle.Top, Height = 28, Font = FontManager.Regular(11f), ForeColor = Color.FromArgb(175, 175, 175), Text = "",  AutoEllipsis = true };
         _monAlbum  = new Label { Dock = DockStyle.Top, Height = 22, Font = FontManager.Italic(9f),   ForeColor = Color.FromArgb(85, 85, 85),    Text = "",  AutoEllipsis = true };
         cardInner.Controls.Add(_monAlbum);
         cardInner.Controls.Add(_monArtist);
         cardInner.Controls.Add(_monTitle);
-        cardInner.Controls.Add(nowLbl);
+        cardInner.Controls.Add(_monNowLbl);
         card.Controls.Add(cardInner);
         card.Controls.Add(artWrap);
         card.Controls.Add(_accentBar);
@@ -458,47 +462,18 @@ public class MainForm : Form
         _statPending.Location = new Point(540, 12);
         statsRow.Controls.AddRange([_statTotal, _statToday, _statWeek, _statPending]);
 
-        _historyGrid = new DataGridView
-        {
-            Dock = DockStyle.Fill, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
-            RowHeadersVisible = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            BackgroundColor = Color.FromArgb(20, 20, 20), GridColor = Color.FromArgb(35, 35, 35),
-            BorderStyle = BorderStyle.None, ForeColor = CFg, EnableHeadersVisualStyles = false,
-            MultiSelect = false, Font = FontManager.Regular(9f),
-        };
-        _historyGrid.DefaultCellStyle.BackColor          = Color.FromArgb(26, 26, 26);
-        _historyGrid.DefaultCellStyle.ForeColor          = CFg;
-        _historyGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 45, 45);
-        _historyGrid.DefaultCellStyle.SelectionForeColor = CFg;
-        _historyGrid.DefaultCellStyle.Padding            = new Padding(0, 3, 0, 3);
-        _historyGrid.AlternatingRowsDefaultCellStyle.BackColor        = Color.FromArgb(22, 22, 22);
-        _historyGrid.ColumnHeadersDefaultCellStyle.BackColor          = Color.FromArgb(18, 18, 18);
-        _historyGrid.ColumnHeadersDefaultCellStyle.ForeColor          = Color.FromArgb(90, 90, 90);
-        _historyGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(18, 18, 18);
-        _historyGrid.ColumnHeadersDefaultCellStyle.Font               = FontManager.Bold(8f);
-        _historyGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        _historyGrid.ColumnHeadersHeight = 30;
-        _historyGrid.RowTemplate.Height  = 28;
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time",   HeaderText = Loc.T("ColTime"),   FillWeight = 14 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Artist", HeaderText = Loc.T("ColArtist"), FillWeight = 25 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Title",  HeaderText = Loc.T("ColTrack"),  FillWeight = 30 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Album",  HeaderText = Loc.T("ColAlbum"),  FillWeight = 26 });
-        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = Loc.T("ColStatus"), FillWeight = 5  });
-        if (_historyGrid.Columns["Id"] is null)
-            _historyGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", Visible = false });
+        _historyList = new HistoryList { Dock = DockStyle.Fill, Accent = _cAccent };
 
-        // Right-click context menu
-        var ctxMenu = new ContextMenuStrip { BackColor = Color.FromArgb(30, 30, 30), ForeColor = CFg };
+        var ctxMenu  = new ContextMenuStrip { BackColor = Color.FromArgb(30, 30, 30), ForeColor = CFg };
         var editItem = new ToolStripMenuItem("Edit & Rescrobble");
         editItem.Click += EditScrobbleClicked;
         ctxMenu.Items.Add(editItem);
-        _historyGrid.ContextMenuStrip = ctxMenu;
-        _historyGrid.MouseDown += (_, e) =>
+        _historyList.ContextMenuStrip = ctxMenu;
+        _historyList.MouseDown += (_, e) =>
         {
             if (e.Button != MouseButtons.Right) return;
-            var hit = _historyGrid.HitTest(e.X, e.Y);
-            if (hit.RowIndex >= 0) _historyGrid.Rows[hit.RowIndex].Selected = true;
+            int idx = _historyList.IndexFromPoint(e.Location);
+            if (idx >= 0) _historyList.SelectedIndex = idx;
         };
 
         var btnRow = new Panel { Dock = DockStyle.Bottom, Height = 46, BackColor = CMain };
@@ -520,7 +495,7 @@ public class MainForm : Form
 
         btnRow.Controls.AddRange([refreshBtn, manualBtn, exportBtn, importBtn]);
 
-        _pageHistory.Controls.Add(_historyGrid);
+        _pageHistory.Controls.Add(_historyList);
         _pageHistory.Controls.Add(statsRow);
         _pageHistory.Controls.Add(heading);
         _pageHistory.Controls.Add(btnRow);
@@ -529,17 +504,7 @@ public class MainForm : Form
     private void LoadHistory()
     {
         if (InvokeRequired) { Invoke(LoadHistory); return; }
-        _historyGrid.Rows.Clear();
-        foreach (var rec in _db.LoadHistory(200))
-        {
-            var status = rec.Success ? "✓" : "✗";
-            var i = _historyGrid.Rows.Add(
-                rec.ScrobbledAt.ToLocalTime().ToString("MM-dd HH:mm"),
-                rec.Artist, rec.Title, rec.Album, status);
-            _historyGrid.Rows[i].Tag = rec.Id;
-            _historyGrid.Rows[i].DefaultCellStyle.ForeColor =
-                rec.Success ? CFg : Color.FromArgb(180, 60, 60);
-        }
+        _historyList.Load(_db.LoadHistory(200));
     }
 
     private void RefreshStats()
@@ -555,19 +520,13 @@ public class MainForm : Form
 
     private void EditScrobbleClicked(object? sender, EventArgs e)
     {
-        if (_historyGrid.SelectedRows.Count == 0) return;
-        var row = _historyGrid.SelectedRows[0];
-        if (row.Tag is not int id) return;
+        if (_historyList.SelectedRecord is not ScrobbleRecord rec) return;
 
-        var artist = row.Cells["Artist"].Value?.ToString() ?? "";
-        var title  = row.Cells["Title"].Value?.ToString()  ?? "";
-        var album  = row.Cells["Album"].Value?.ToString()  ?? "";
-
-        var fakeTrack = new Track { Artist = artist, Title = title, Album = album };
+        var fakeTrack = new Track { Artist = rec.Artist, Title = rec.Title, Album = rec.Album };
         using var dlg = new EditTrackForm(fakeTrack);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-        _db.UpdateScrobbleRecord(id, fakeTrack.Artist, fakeTrack.Title, fakeTrack.Album);
+        _db.UpdateScrobbleRecord(rec.Id, fakeTrack.Artist, fakeTrack.Title, fakeTrack.Album);
         _ = _engine.ManualScrobbleAsync(fakeTrack.Artist, fakeTrack.Title, fakeTrack.Album, DateTime.Now);
         LoadHistory();
         AppendLog(LogKind.Manual, $"{fakeTrack.Artist} — {fakeTrack.Title}");
@@ -730,13 +689,23 @@ public class MainForm : Form
             e.Graphics.DrawRectangle(pen, 0, 0, heroCard.Width - 1, heroCard.Height - 1);
         };
 
+        var rawMark = LoadEmbeddedImage("mark.png");
         var noteLabel = new PictureBox
         {
-            Location = new Point(20, 22),
-            Size     = new Size(58, 48),
-            SizeMode = PictureBoxSizeMode.Zoom,
-            Image    = LoadEmbeddedImage("mark.png"),
+            Location  = new Point(20, 22),
+            Size      = new Size(58, 48),
+            SizeMode  = PictureBoxSizeMode.Normal,
             BackColor = Color.Transparent,
+        };
+        noteLabel.Paint += (_, pe) =>
+        {
+            if (rawMark is null) return;
+            pe.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            pe.Graphics.PixelOffsetMode   = PixelOffsetMode.HighQuality;
+            pe.Graphics.SmoothingMode     = SmoothingMode.AntiAlias;
+            float r = Math.Min((float)noteLabel.Width / rawMark.Width, (float)noteLabel.Height / rawMark.Height);
+            int w = (int)(rawMark.Width * r), h = (int)(rawMark.Height * r);
+            pe.Graphics.DrawImage(rawMark, (noteLabel.Width - w) / 2, (noteLabel.Height - h) / 2, w, h);
         };
 
         var appNameLabel = new Label
@@ -791,7 +760,7 @@ public class MainForm : Form
             Color.Transparent,
             LightenColor(_cAccent, 18),
             Color.White,
-            () => OpenUrl("https://spacechild.dev/donate"));
+            () => OpenUrl("https://buymeacoffee.com/daiquiri"));
         btnDonate.Location = new Point(lx, y);
 
         var btnGitHub = AboutActionBtn(
@@ -1413,60 +1382,165 @@ public class MainForm : Form
         }
     }
 
-    private void PopulateFriends((string name, string artist, string track, bool nowPlaying)[] friends)
+    private void PopulateFriends((string name, string artist, string track, bool nowPlaying, string imageUrl)[] friends)
     {
         _friendsListPanel.Controls.Clear();
         _friendsStatusLbl.Text = $"{friends.Length} friends";
 
-        int y = 0;
-        foreach (var (name, artist, track, nowPlaying) in friends)
+        if (friends.Length == 0)
         {
+            _friendsListPanel.Controls.Add(new Label
+            {
+                Text = "No friends found. Add friends on Last.fm first.",
+                Dock = DockStyle.Top, Height = 60,
+                Font = FontManager.Regular(9f), ForeColor = CDim,
+                TextAlign = ContentAlignment.MiddleCenter,
+            });
+            return;
+        }
+
+        const int cardH    = 68;
+        const int avatarSz = 46;
+        int       y        = 0;
+
+        foreach (var (name, artist, track, nowPlaying, imageUrl) in friends)
+        {
+            var bgColor = y / cardH % 2 == 0 ? Color.FromArgb(22, 22, 22) : Color.FromArgb(20, 20, 20);
             var row = new Panel
             {
                 Location  = new Point(0, y),
-                Size      = new Size(_friendsListPanel.ClientSize.Width, 50),
-                BackColor = y % 100 < 50 ? Color.FromArgb(24, 24, 24) : Color.FromArgb(22, 22, 22),
+                Size      = new Size(_friendsListPanel.ClientSize.Width, cardH),
+                BackColor = bgColor,
                 Anchor    = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             };
 
-            var nameLbl = new Label
+            // ── Circular avatar ────────────────────────────────────────────
+            var avatar = new PictureBox
             {
-                Text = name, Location = new Point(20, 8), Size = new Size(200, 18),
-                Font = FontManager.Bold(9.5f), ForeColor = CFg, AutoEllipsis = true,
+                Size      = new Size(avatarSz, avatarSz),
+                Location  = new Point(20, (cardH - avatarSz) / 2),
+                BackColor = Color.Transparent,
             };
-            var trackLbl = new Label
+            avatar.Paint += (s, pe) =>
             {
-                Text = track.Length > 0 ? $"{artist} — {track}" : "—",
-                Location = new Point(20, 26), Size = new Size(600, 16),
-                Font = FontManager.Regular(8.5f), ForeColor = CDim, AutoEllipsis = true,
-            };
-            var indicator = new Label
-            {
-                Text = nowPlaying ? "♪" : "",
-                Location = new Point(230, 14), Size = new Size(20, 20),
-                Font = FontManager.Regular(11f), ForeColor = _cAccent,
-                TextAlign = ContentAlignment.MiddleCenter,
+                var pb = (PictureBox)s!;
+                pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var path = new GraphicsPath();
+                path.AddEllipse(0, 0, pb.Width - 1, pb.Height - 1);
+                pe.Graphics.SetClip(path);
+                if (pb.Image is not null)
+                {
+                    pe.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    pe.Graphics.DrawImage(pb.Image, 0, 0, pb.Width, pb.Height);
+                }
+                else
+                {
+                    pe.Graphics.FillEllipse(new SolidBrush(Color.FromArgb(38, 38, 38)), 0, 0, pb.Width - 1, pb.Height - 1);
+                    var initial = name.Length > 0 ? name[0].ToString().ToUpperInvariant() : "?";
+                    using var f = FontManager.Bold(15f);
+                    TextRenderer.DrawText(pe.Graphics, initial, f,
+                        new Rectangle(0, 0, pb.Width, pb.Height),
+                        Color.FromArgb(80, 80, 80),
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+                pe.Graphics.ResetClip();
+                using var pen = new Pen(Color.FromArgb(38, 38, 38));
+                pe.Graphics.DrawEllipse(pen, 0, 0, pb.Width - 1, pb.Height - 1);
             };
 
-            row.Controls.AddRange([nameLbl, trackLbl, indicator]);
+            int textX = avatar.Right + 16;
+
+            // ── Now playing dot ────────────────────────────────────────────
+            if (nowPlaying)
+            {
+                var dot = new Label
+                {
+                    Text      = "●",
+                    Location  = new Point(textX - 2, 16),
+                    Size      = new Size(12, 12),
+                    Font      = FontManager.Regular(6f),
+                    ForeColor = _cAccent,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                };
+                textX += 14;
+                row.Controls.Add(dot);
+            }
+
+            // ── Name ──────────────────────────────────────────────────────
+            row.Controls.Add(new Label
+            {
+                Text         = name,
+                Location     = new Point(textX, 14),
+                Size         = new Size(400, 20),
+                Font         = FontManager.Bold(9.5f),
+                ForeColor    = CFg,
+                AutoEllipsis = true,
+            });
+
+            // ── Track info ────────────────────────────────────────────────
+            var trackText  = track.Length > 0 ? $"{artist}  —  {track}" : "Not scrobbling recently";
+            var trackColor = nowPlaying ? _cAccent : Color.FromArgb(70, 70, 70);
+            row.Controls.Add(new Label
+            {
+                Text         = trackText,
+                Location     = new Point(textX, 36),
+                Size         = new Size(580, 17),
+                Font         = FontManager.Regular(8.5f),
+                ForeColor    = trackColor,
+                AutoEllipsis = true,
+            });
+
+            // ── Separator ─────────────────────────────────────────────────
+            row.Controls.Add(new Panel
+            {
+                Location  = new Point(20, cardH - 1),
+                Size      = new Size(row.Width - 40, 1),
+                BackColor = Color.FromArgb(28, 28, 28),
+                Anchor    = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+            });
+
+            row.Controls.Add(avatar);
             _friendsListPanel.Controls.Add(row);
-            y += 50;
-        }
 
-        if (friends.Length == 0)
-        {
-            var empty = new Label
-            {
-                Text = "No friends found. Add friends on Last.fm first.",
-                Dock = DockStyle.Top, Height = 40,
-                Font = FontManager.Regular(9f), ForeColor = CDim,
-                TextAlign = ContentAlignment.MiddleCenter,
-            };
-            _friendsListPanel.Controls.Add(empty);
+            if (!string.IsNullOrEmpty(imageUrl))
+                _ = LoadAvatarAsync(avatar, imageUrl);
+
+            y += cardH;
         }
     }
 
+    private static async Task LoadAvatarAsync(PictureBox pb, string url)
+    {
+        try
+        {
+            var bytes = await _avatarClient.GetByteArrayAsync(url);
+            using var ms = new MemoryStream(bytes);
+            var img = Image.FromStream(ms);
+            if (!pb.IsDisposed)
+                pb.Invoke(() => { pb.Image = img; pb.Invalidate(); });
+        }
+        catch { /* ignore */ }
+    }
+
     // ── Monitor Events ────────────────────────────────────────────────────────
+
+    private void ShowLastPlayed()
+    {
+        var last = _db.GetLastSuccessfulScrobble();
+        if (last is null)
+        {
+            _monNowLbl.Text = Loc.T("NowPlaying");
+            _monTitle.ForeColor = CDim;
+            _monTitle.Text = "—"; _monArtist.Text = ""; _monAlbum.Text = "";
+            return;
+        }
+        _monNowLbl.Text = Loc.T("LastPlayed");
+        _monTitle.ForeColor  = Color.FromArgb(90, 90, 90);
+        _monArtist.ForeColor = Color.FromArgb(70, 70, 70);
+        _monTitle.Text  = last.Title;
+        _monArtist.Text = last.Artist;
+        _monAlbum.Text  = last.Album;
+    }
 
     private void OnNowPlaying(object? sender, Track? track)
     {
@@ -1477,12 +1551,13 @@ public class MainForm : Form
 
         if (track is null)
         {
-            _scrobbled = false; _monTitle.Text = "—"; _monArtist.Text = ""; _monAlbum.Text = "";
-            SetStatus(Loc.T("NotPlaying"), CDim);
+            _scrobbled = false;
             _monBar.Value = 0; _monEta.Text = "";
             SetLoveBtn(enabled: false, loved: false);
             _albumArt.Image = null;
             _artistInfoPanel.Visible = false;
+            SetStatus(Loc.T("NotPlaying"), CDim);
+            ShowLastPlayed();
             return;
         }
 
@@ -1490,9 +1565,11 @@ public class MainForm : Form
         if (!isNewTrack) return;
 
         _scrobbled = false; _startedAt = track.DetectedAt; _threshMs = _engine.GetScrobbleThresholdMs(track);
+        _monNowLbl.Text = Loc.T("NowPlaying");
+        _monTitle.ForeColor = CFg;
+        _monArtist.ForeColor = Color.FromArgb(175, 175, 175);
         _monTitle.Text = track.Title; _monArtist.Text = track.Artist;
         SetStatus(Loc.T("WaitingToScrobble"), Color.FromArgb(200, 160, 0));
-        AppendLog(LogKind.NowPlaying, $"{track.Artist} — {track.Title}");
         SetLoveBtn(enabled: _engine.IsAuthenticated, loved: false);
         _trackLoved = false;
 

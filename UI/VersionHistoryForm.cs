@@ -1,22 +1,27 @@
+using System.Runtime.InteropServices;
 using LastFmScrobbler.Core;
 
 namespace LastFmScrobbler.UI;
 
 public class VersionHistoryForm : Form
 {
-    private static readonly Color CMain   = Color.FromArgb(24, 24, 24);
-    private static readonly Color CInput  = Color.FromArgb(36, 36, 36);
-    private static readonly Color CFg     = Color.FromArgb(220, 220, 220);
-    private static readonly Color CDim    = Color.FromArgb(110, 110, 110);
+    private static readonly Color CMain  = Color.FromArgb(24, 24, 24);
+    private static readonly Color CInput = Color.FromArgb(32, 32, 32);
+    private static readonly Color CFg    = Color.FromArgb(220, 220, 220);
+    private static readonly Color CDim   = Color.FromArgb(100, 100, 100);
 
     private readonly UpdateChecker _checker;
     private readonly Color         _accent;
-    private ListBox  _list    = null!;
-    private Button   _installBtn = null!;
-    private Label    _statusLbl  = null!;
-    private ProgressBar _progress = null!;
+    private RichTextBox  _changelog   = null!;
+    private ComboBox     _versionPick = null!;
+    private Button       _installBtn  = null!;
+    private Label        _statusLbl   = null!;
+    private ProgressBar  _progress    = null!;
     private List<UpdateChecker.VersionEntry> _versions = [];
     private string _currentVersion;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     public VersionHistoryForm(UpdateChecker checker, Color accent)
     {
@@ -24,13 +29,14 @@ public class VersionHistoryForm : Form
         _accent         = accent;
         _currentVersion = UpdateChecker.DisplayVersion;
         InitializeComponent();
-        _ = LoadVersionsAsync();
+        _ = LoadAsync();
     }
 
     private void InitializeComponent()
     {
-        Text            = "Version History";
-        Size            = new Size(480, 380);
+        Text            = "What's New";
+        Size            = new Size(480, 540);
+        MinimumSize     = new Size(400, 400);
         StartPosition   = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox     = false;
@@ -41,50 +47,62 @@ public class VersionHistoryForm : Form
 
         var heading = new Label
         {
-            Text     = "Available Versions",
-            Dock     = DockStyle.Top,
-            Height   = 40,
-            Padding  = new Padding(16, 12, 0, 0),
-            Font     = FontManager.Bold(10f),
+            Text      = "What's New",
+            Dock      = DockStyle.Top,
+            Height    = 44,
+            Padding   = new Padding(18, 13, 0, 0),
+            Font      = FontManager.Bold(11f),
             ForeColor = CFg,
         };
 
-        _list = new ListBox
-        {
-            Dock            = DockStyle.Fill,
-            BackColor       = CInput,
-            ForeColor       = CFg,
-            BorderStyle     = BorderStyle.None,
-            Font            = FontManager.Regular(9.5f),
-            ItemHeight      = 26,
-            DrawMode        = DrawMode.OwnerDrawFixed,
-        };
-        _list.DrawItem       += ListDrawItem;
-        _list.SelectedIndexChanged += (_, _) => UpdateButtons();
+        var divider = new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Color.FromArgb(38, 38, 38) };
 
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 52, BackColor = Color.FromArgb(18, 18, 18) };
+        _changelog = new RichTextBox
+        {
+            Dock        = DockStyle.Fill,
+            BackColor   = CMain,
+            ForeColor   = CFg,
+            Font        = FontManager.Regular(9.5f),
+            ReadOnly    = true,
+            BorderStyle = BorderStyle.None,
+            ScrollBars  = RichTextBoxScrollBars.Vertical,
+            TabStop     = false,
+        };
+        _changelog.LinkClicked += (_, _) => { };
+
+        var changelogWrapper = new Panel
+        {
+            Dock      = DockStyle.Fill,
+            BackColor = CMain,
+            Padding   = new Padding(14, 10, 4, 0),
+        };
+        changelogWrapper.Controls.Add(_changelog);
+
+        // ── Bottom bar ──────────────────────────────────────────────────────
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 54, BackColor = Color.FromArgb(18, 18, 18) };
 
         _statusLbl = new Label
         {
-            Location  = new Point(16, 18),
-            Size      = new Size(200, 20),
+            Location  = new Point(18, 19),
+            Size      = new Size(180, 18),
             ForeColor = CDim,
             Font      = FontManager.Regular(8.5f),
+            Text      = "Loading…",
         };
 
         _progress = new ProgressBar
         {
-            Location = new Point(16, 14),
-            Size     = new Size(220, 22),
+            Location = new Point(18, 15),
+            Size     = new Size(200, 22),
             Visible  = false,
             Style    = ProgressBarStyle.Continuous,
         };
 
         _installBtn = new Button
         {
-            Text      = "Install Selected",
-            Size      = new Size(140, 32),
-            Location  = new Point(480 - 140 - 16, 10),
+            Text      = "Install",
+            Size      = new Size(80, 30),
+            Location  = new Point(480 - 80 - 18, 12),
             FlatStyle = FlatStyle.Flat,
             BackColor = _accent,
             ForeColor = Color.White,
@@ -95,56 +113,129 @@ public class VersionHistoryForm : Form
         _installBtn.FlatAppearance.BorderSize = 0;
         _installBtn.Click += InstallClicked;
 
-        bottom.Controls.AddRange([_statusLbl, _progress, _installBtn]);
-        Controls.Add(_list);
+        _versionPick = new ComboBox
+        {
+            Size          = new Size(140, 30),
+            Location      = new Point(480 - 80 - 18 - 148, 14),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor     = Color.FromArgb(40, 40, 40),
+            ForeColor     = CFg,
+            FlatStyle     = FlatStyle.Flat,
+            Font          = FontManager.Regular(9f),
+            Enabled       = false,
+        };
+        _versionPick.SelectedIndexChanged += (_, _) => _installBtn.Enabled = _versionPick.SelectedIndex >= 0;
+
+        bottom.Controls.AddRange([_statusLbl, _progress, _versionPick, _installBtn]);
+
         Controls.Add(heading);
+        Controls.Add(divider);
         Controls.Add(bottom);
+        Controls.Add(changelogWrapper);
     }
 
-    private void ListDrawItem(object? sender, DrawItemEventArgs e)
+    private async Task LoadAsync()
     {
-        if (e.Index < 0 || e.Index >= _versions.Count) return;
-        var v = _versions[e.Index];
+        try
+        {
+            _versions = await _checker.GetVersionHistoryAsync();
+        }
+        catch
+        {
+            _versions = [];
+        }
 
-        e.DrawBackground();
-        var selected = (e.State & DrawItemState.Selected) != 0;
-        using var bg = new SolidBrush(selected ? Color.FromArgb(45, 45, 45) : (e.Index % 2 == 0 ? CInput : Color.FromArgb(30, 30, 30)));
-        e.Graphics.FillRectangle(bg, e.Bounds);
+        if (_versions.Count == 0)
+        {
+            _statusLbl.Text = "Could not load version history.";
+            AppendText("Unable to load changelog. Check your connection.", FontManager.Regular(9.5f), CDim);
+            return;
+        }
 
-        var isCurrent = v.Version == _currentVersion;
-        var versionText = isCurrent ? $"v{v.Version}  (current)" : $"v{v.Version}";
-        using var fgBrush = new SolidBrush(isCurrent ? Color.FromArgb(80, 200, 80) : CFg);
-        using var dateBrush = new SolidBrush(CDim);
-
-        e.Graphics.DrawString(versionText, FontManager.Bold(9f), fgBrush, e.Bounds.X + 16, e.Bounds.Y + 6);
-        if (!string.IsNullOrEmpty(v.Date))
-            e.Graphics.DrawString(v.Date, FontManager.Regular(8.5f), dateBrush, e.Bounds.X + 160, e.Bounds.Y + 8);
+        PopulateChangelog();
+        PopulateVersionPicker();
+        _statusLbl.Text = $"{_versions.Count} versions";
     }
 
-    private async Task LoadVersionsAsync()
+    private void PopulateChangelog()
     {
-        _statusLbl.Text = "Loading…";
-        _versions = await _checker.GetVersionHistoryAsync();
-        _list.Items.Clear();
-        foreach (var v in _versions) _list.Items.Add(v.Version);
-        _statusLbl.Text = _versions.Count > 0 ? $"{_versions.Count} version(s) available" : "No versions found.";
-        UpdateButtons();
+        SendMessage(_changelog.Handle, 0x000B, IntPtr.Zero, IntPtr.Zero); // WM_SETREDRAW false
+        _changelog.Clear();
+
+        for (int i = 0; i < _versions.Count; i++)
+        {
+            var v          = _versions[i];
+            var isCurrent  = v.Version == _currentVersion;
+            var headerColor = isCurrent ? Color.FromArgb(80, 200, 80) : CFg;
+
+            if (i > 0)
+                AppendText(Environment.NewLine, FontManager.Regular(5f), CMain);
+
+            // Version + date
+            AppendText($"v{v.Version}", FontManager.Bold(10.5f), headerColor);
+            if (!string.IsNullOrEmpty(v.Date))
+                AppendText($"   ·   {v.Date}", FontManager.Regular(8.5f), CDim);
+            if (isCurrent)
+                AppendText("   current", FontManager.Bold(8f), Color.FromArgb(60, 160, 60));
+            AppendText(Environment.NewLine, FontManager.Regular(4f), CMain);
+
+            // Notes
+            if (v.Notes.Length > 0)
+            {
+                foreach (var note in v.Notes)
+                    AppendText($"  •  {note}{Environment.NewLine}", FontManager.Regular(9.5f), Color.FromArgb(180, 180, 180));
+            }
+            else
+            {
+                AppendText($"  No release notes.{Environment.NewLine}", FontManager.Italic(9f), Color.FromArgb(75, 75, 75));
+            }
+
+            // Separator (not after last item)
+            if (i < _versions.Count - 1)
+            {
+                AppendText(Environment.NewLine, FontManager.Regular(3f), CMain);
+                AppendText(new string('─', 52) + Environment.NewLine, FontManager.Regular(7f), Color.FromArgb(42, 42, 42));
+            }
+        }
+
+        _changelog.Select(0, 0);
+        SendMessage(_changelog.Handle, 0x000B, (IntPtr)1, IntPtr.Zero); // WM_SETREDRAW true
+        _changelog.Invalidate();
     }
 
-    private void UpdateButtons()
+    private void PopulateVersionPicker()
     {
-        _installBtn.Enabled = _list.SelectedIndex >= 0;
+        _versionPick.Items.Clear();
+        foreach (var v in _versions)
+            _versionPick.Items.Add($"v{v.Version}");
+
+        _versionPick.Enabled = _versions.Count > 0;
+        if (_versions.Count > 0)
+        {
+            var currentIdx = _versions.FindIndex(v => v.Version == _currentVersion);
+            _versionPick.SelectedIndex = currentIdx >= 0 ? currentIdx : 0;
+        }
+    }
+
+    private void AppendText(string text, Font font, Color color)
+    {
+        _changelog.SelectionStart  = _changelog.TextLength;
+        _changelog.SelectionLength = 0;
+        _changelog.SelectionFont   = font;
+        _changelog.SelectionColor  = color;
+        _changelog.AppendText(text);
     }
 
     private async void InstallClicked(object? sender, EventArgs e)
     {
-        if (_list.SelectedIndex < 0) return;
-        var entry = _versions[_list.SelectedIndex];
+        if (_versionPick.SelectedIndex < 0) return;
+        var entry = _versions[_versionPick.SelectedIndex];
 
-        _installBtn.Enabled = false;
-        _statusLbl.Visible  = false;
-        _progress.Visible   = true;
-        _progress.Value     = 0;
+        _installBtn.Enabled   = false;
+        _versionPick.Enabled  = false;
+        _statusLbl.Visible    = false;
+        _progress.Visible     = true;
+        _progress.Value       = 0;
 
         try
         {
@@ -156,11 +247,12 @@ public class VersionHistoryForm : Form
         }
         catch (Exception ex)
         {
-            _progress.Visible  = false;
-            _statusLbl.Visible = true;
-            _statusLbl.Text    = $"Error: {ex.Message}";
+            _progress.Visible    = false;
+            _statusLbl.Visible   = true;
+            _statusLbl.Text      = $"Error: {ex.Message}";
             _statusLbl.ForeColor = Color.FromArgb(220, 60, 60);
-            _installBtn.Enabled = true;
+            _installBtn.Enabled  = true;
+            _versionPick.Enabled = true;
         }
     }
 }

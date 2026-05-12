@@ -26,7 +26,7 @@ public class UpdateChecker
         Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     public record UpdateInfo(string Version, string Url, string Sha256);
-    public record VersionEntry(string Version, string Url, string Sha256, string Date);
+    public record VersionEntry(string Version, string Url, string Sha256, string Date, string[] Notes);
 
     /// <summary>
     /// Returns update info if a newer version exists, or null if already up-to-date.
@@ -104,10 +104,11 @@ public class UpdateChecker
             var arr  = JArray.Parse(json);
             return arr
                 .Select(o => new VersionEntry(
-                    o["version"]?.ToString() ?? "",
-                    o["url"]?.ToString()     ?? "",
-                    o["sha256"]?.ToString()  ?? "",
-                    o["date"]?.ToString()    ?? ""))
+                    o["version"]?.ToString()          ?? "",
+                    o["url"]?.ToString()              ?? "",
+                    o["sha256"]?.ToString()           ?? "",
+                    o["date"]?.ToString()             ?? "",
+                    o["notes"]?.ToObject<string[]>()  ?? []))
                 .Where(v => !string.IsNullOrEmpty(v.Version))
                 .ToList();
         }

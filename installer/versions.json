@@ -1,5 +1,46 @@
 [
   {
+    "version": "1.2.15",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.15.exe",
+    "sha256": "ac60f630be39b6e84c9ae75e06e5a557c28d121a10990793f8ec33ad19979a76",
+    "date": "2026-05-12",
+    "notes": "Fix: Version History always opens at the top"
+  },
+  {
+    "version": "1.2.14",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.14.exe",
+    "sha256": "366d23bfe42ae2492b66a9ba7c6eacfd3490b25df1fae3d7d166f973ee5c9a58",
+    "date": "2026-05-12",
+    "notes": [
+      "Fix: Version History top entry no longer cut off",
+      "Fix: Changelog content no longer flush against left edge"
+    ]
+  },
+  {
+    "version": "1.2.13",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.13.exe",
+    "sha256": "5b055094f2db2d6eca60d0f40254ab028a3f452fef9400e96a6215f8ec3d452b",
+    "date": "2026-05-12",
+    "notes": [
+      "Monitor shows last played track when idle",
+      "Version History redesigned as a clean changelog",
+      "Log no longer shows duplicate Now playing entries",
+      "Fix: Check for Updates dialog no longer gets stuck hidden"
+    ]
+  },
+  {
+    "version": "1.2.12",
+    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.12.exe",
+    "sha256": "41989ddf2fbfe50d0b70238863e8691882b5ab77266175ed5bd377db0e77b080",
+    "date": "2026-05-12",
+    "notes": [
+      "Monitor shows last played track when idle",
+      "Version History redesigned as a clean changelog",
+      "Log no longer shows duplicate Now playing entries",
+      "Fix: Check for Updates dialog no longer gets stuck hidden"
+    ]
+  },
+  {
     "version": "1.2.11",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.11.exe",
     "sha256": "8a9486f5f1c65bf63d607bb531cab25b4e273cfbf28f47a4eb79f2127d782c56",
@@ -33,30 +74,6 @@
     "version": "1.2.6",
     "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.6.exe",
     "sha256": "4f239a04a7d397e747bdef1b5c35810b65bb708b314cd784f2d179748e0df1ec",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.5",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.5.exe",
-    "sha256": "d22f3285f3761f6b388c36c20ee8c3621fb82b6b71f96d0e8980db16b396460c",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.4",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.4.exe",
-    "sha256": "563032299e50a3dbbd932c74e301de3032eab3a29995060a84d75ad56fc8889e",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.3",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.3.exe",
-    "sha256": "76f4f3aedbd7b276c7762ec0b769bf884e0d5b109a7aa6b6fc88680e126bc298",
-    "date": "2026-05-10"
-  },
-  {
-    "version": "1.2.2",
-    "url": "https://pub-8a5464b225534730b481b262ffe4748b.r2.dev/lastfm-scrobbler/LastFmScrobbler-Setup-1.2.2.exe",
-    "sha256": "6fb6ac78672785eec3d901ba7b353c54620b1d2adb18c84c7232335b698dbb20",
     "date": "2026-05-10"
   }
 ]
