@@ -47,6 +47,15 @@ AMWin-RichPresence-v1.6.1-x64/
 icons-preview/
 *.log
 
+# AI / Claude Code artifacts
+claude-ops.log
+claude-ops*
+.cursorrules
+.cursor/
+.windsurfrules
+.windsurf/
+.github/copilot-instructions.md
+
 # NuGet
 *.nupkg
 *.snupkg
